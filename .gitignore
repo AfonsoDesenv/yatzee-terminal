@@ -1,0 +1,8 @@
+# Go
+/yatzee
+/bin/
+*.test
+
+# Dados locais e chaves
+/.data/
+ssh_host_*
