@@ -38,7 +38,10 @@ func PlayLocal(ctx context.Context) error {
 		_ = players.Touch(ctx, id.ID)
 	}
 
-	if _, err := tea.NewProgram(NewRoot(sess, FirstScreen(sess))).Run(); err != nil {
+	// WithContext liga o cancelamento ao programa. Sem isto o ctx chega
+	// apenas aos stores, e um SIGTERM não encerraria a partida local.
+	prog := tea.NewProgram(NewRoot(sess, FirstScreen(sess)), tea.WithContext(ctx))
+	if _, err := prog.Run(); err != nil {
 		return fmt.Errorf("rodar o jogo: %w", err)
 	}
 	return nil

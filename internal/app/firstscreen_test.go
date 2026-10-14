@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/afonsodesenv/yatzee-terminal/internal/player"
@@ -58,5 +60,32 @@ func TestLocalIdentitySemRegistroVemSemNome(t *testing.T) {
 	}
 	if id.Name != "" {
 		t.Errorf("Name = %q, quero vazio", id.Name)
+	}
+}
+
+// lojaQuebrada falha em toda leitura, para provar que erro de armazenamento
+// não é confundido com jogador desconhecido.
+type lojaQuebrada struct{ err error }
+
+func (l lojaQuebrada) Get(context.Context, string) (player.Player, bool, error) {
+	return player.Player{}, false, l.err
+}
+
+func (l lojaQuebrada) Claim(context.Context, string, string) (player.Player, error) {
+	return player.Player{}, nil
+}
+
+func (l lojaQuebrada) NameTaken(context.Context, string) (bool, error) { return false, nil }
+
+func (l lojaQuebrada) Touch(context.Context, string) error { return nil }
+
+func TestLocalIdentityPropagaErroDoStore(t *testing.T) {
+	falha := errors.New("disco quebrou")
+	id, err := localIdentityFor(ctx(), "fulano", lojaQuebrada{err: falha})
+	if !errors.Is(err, falha) {
+		t.Fatalf("err = %v, quero que embrulhe %v", err, falha)
+	}
+	if id != (player.Identity{}) {
+		t.Errorf("id = %+v, quero identidade vazia no erro", id)
 	}
 }
