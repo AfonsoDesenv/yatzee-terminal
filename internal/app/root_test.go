@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -147,8 +148,11 @@ func TestWindowSizeChegaATelaDoTopoNormalizado(t *testing.T) {
 	if !ok {
 		t.Fatalf("topo é %T, quero telaMedidora", m.Top())
 	}
-	if medida.w != ui.DefaultWidth || medida.h != ui.DefaultHeight {
-		t.Errorf("a tela recebeu (%d, %d), quero (%d, %d)", medida.w, medida.h, ui.DefaultWidth, ui.DefaultHeight)
+	// A tela desenha dentro da moldura, então recebe o tamanho já descontado
+	// da borda: duas colunas e duas linhas.
+	queroW, queroH := ui.DefaultWidth-2, ui.DefaultHeight-2
+	if medida.w != queroW || medida.h != queroH {
+		t.Errorf("a tela recebeu (%d, %d), quero (%d, %d)", medida.w, medida.h, queroW, queroH)
 	}
 
 	w, h := m.Size()
@@ -165,6 +169,28 @@ func TestViewUsaAltScreenEOTopoDaPilha(t *testing.T) {
 	}
 	if v.Content == "" {
 		t.Error("View().Content vazio")
+	}
+}
+
+// A moldura existe para o jogador ver onde a tela acaba, e tem de ter
+// exatamente o tamanho do terminal: uma borda maior vaza e quebra o desenho.
+func TestViewDesenhaAMolduraDoTamanhoDaTela(t *testing.T) {
+	m := passo(NewRoot(telaFake{nome: "menu"}), tea.WindowSizeMsg{Width: 60, Height: 20})
+
+	linhas := strings.Split(m.View().Content, "\n")
+	if len(linhas) != 20 {
+		t.Fatalf("a moldura tem %d linhas, quero 20", len(linhas))
+	}
+	for i, l := range linhas {
+		if n := len([]rune(l)); n != 60 {
+			t.Errorf("linha %d tem %d colunas, quero 60", i, n)
+		}
+	}
+	if !strings.HasPrefix(linhas[0], ".---") {
+		t.Errorf("topo da moldura = %q", linhas[0])
+	}
+	if !strings.HasPrefix(linhas[len(linhas)-1], "'---") {
+		t.Errorf("base da moldura = %q", linhas[len(linhas)-1])
 	}
 }
 

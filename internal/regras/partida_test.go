@@ -194,7 +194,7 @@ func TestProximoNivelDobraAMetaEEnchiTudo(t *testing.T) {
 	alvoAntes := p.Alvo
 	recompensa := p.Recompensa()
 
-	p = p.ProximoNivel(rnd())
+	p = p.Premia().ProximoNivel(rnd())
 
 	if p.Nivel != 2 {
 		t.Errorf("nível = %d, quero 2", p.Nivel)
@@ -214,14 +214,28 @@ func TestProximoNivelDobraAMetaEEnchiTudo(t *testing.T) {
 }
 
 // As moedas se acumulam entre níveis, senão a loja nunca teria o que vender.
+// Premia credita; ProximoNivel nao mexe em moeda. Separados porque o saldo tem
+// de estar certo quando a loja abre, e nao so depois dela.
+func TestProximoNivelNaoCreditaSozinho(t *testing.T) {
+	p := NovaPartida(rnd())
+	p.Pontos = p.Alvo
+	antes := p.Moedas
+	if got := p.ProximoNivel(rnd()).Moedas; got != antes {
+		t.Errorf("ProximoNivel creditou sozinho: moedas %d, quero %d", got, antes)
+	}
+	if got := p.Premia().Moedas; got == antes {
+		t.Error("Premia nao creditou nada")
+	}
+}
+
 func TestMoedasAcumulamEntreNiveis(t *testing.T) {
 	p := NovaPartida(rnd())
 	p.Pontos = p.Alvo
-	p = p.ProximoNivel(rnd())
+	p = p.Premia().ProximoNivel(rnd())
 	primeiras := p.Moedas
 
 	p.Pontos = p.Alvo
-	p = p.ProximoNivel(rnd())
+	p = p.Premia().ProximoNivel(rnd())
 
 	if p.Moedas <= primeiras {
 		t.Errorf("moedas = %d depois do segundo nível, não acumulou sobre %d", p.Moedas, primeiras)

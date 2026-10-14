@@ -55,8 +55,9 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// reemitida não cai neste ramo de novo — e é ela que chega às telas.
 			return m, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
 		}
-		// Tamanho já normalizado: a tela do topo pode se organizar com ele.
-		return m.updateTop(tea.WindowSizeMsg{Width: w, Height: h})
+		// A tela do topo desenha dentro da moldura, então recebe o tamanho já
+		// descontado da borda.
+		return m.updateTop(tea.WindowSizeMsg{Width: w - 2, Height: h - 2})
 
 	case tea.KeyPressMsg:
 		// Sai de qualquer lugar, sem passar pela tela. Vem do mapa de teclas,
@@ -87,9 +88,11 @@ func (m Root) updateTop(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// View é o único lugar que lida com tea.View.
+// View é o único lugar que lida com tea.View. A moldura é desenhada aqui, e
+// não em cada tela, para a borda ser a mesma em todas e as telas não
+// precisarem saber que existe.
 func (m Root) View() tea.View {
-	v := tea.NewView(m.Top().View())
+	v := tea.NewView(ui.Moldura(m.Top().View(), m.width, m.height))
 	v.AltScreen = true
 	return v
 }

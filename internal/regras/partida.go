@@ -124,9 +124,17 @@ func (p Partida) Recompensa() int {
 		p.Rerolls*MoedasPorRerollSobrando
 }
 
-// ProximoNivel recebe a recompensa, dobra a meta e devolve tudo cheio de novo.
-func (p Partida) ProximoNivel(rnd *rand.Rand) Partida {
+// Premia credita a recompensa da vitória. Fica separado de ProximoNivel
+// porque as moedas entram quando a vitória é anunciada, e não quando o jogador
+// sai da loja: é o saldo que a loja usa.
+func (p Partida) Premia() Partida {
 	p.Moedas += p.Recompensa()
+	return p
+}
+
+// ProximoNivel dobra a meta e devolve tudo cheio de novo. Não mexe nas moedas:
+// quem credita é Premia, na vitória.
+func (p Partida) ProximoNivel(rnd *rand.Rand) Partida {
 	p.Nivel++
 	p.Alvo *= 2
 	p.Pontos = 0

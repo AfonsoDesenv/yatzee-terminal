@@ -117,3 +117,59 @@ func CentralizaBloco(bloco []string, largura, altura int) []string {
 	}
 	return out
 }
+
+// Moldura desenha uma borda em volta do conteúdo, do tamanho exato da tela.
+// Serve para o jogador ver onde a tela acaba, em vez de o conteúdo se perder
+// no fundo do terminal.
+func Moldura(conteudo string, largura, altura int) string {
+	interno := largura - 2
+	linhas := strings.Split(conteudo, "\n")
+
+	var b strings.Builder
+	b.WriteString("." + strings.Repeat("-", interno) + ".\n")
+	for i := 0; i < altura-2; i++ {
+		l := ""
+		if i < len(linhas) {
+			l = linhas[i]
+		}
+		// Corta o que passar da largura: conteúdo vazando quebraria a borda.
+		if Largura(l) > interno {
+			r := []rune(l)
+			l = string(r[:interno])
+		}
+		b.WriteString("|" + l + strings.Repeat(" ", interno-Largura(l)) + "|\n")
+	}
+	b.WriteString("'" + strings.Repeat("-", interno) + "'")
+	return b.String()
+}
+
+// SobreOpaco escreve um bloco por cima do fundo apagando o que havia atrás —
+// ao contrário de fogo.Sobre, que deixa o fundo aparecer nos espaços. É o que
+// mantém um modal legível sobre a tela em chamas.
+func SobreOpaco(fundo, bloco []string) []string {
+	out := append([]string(nil), fundo...)
+	larguraBloco := 0
+	for _, l := range bloco {
+		if w := Largura(l); w > larguraBloco {
+			larguraBloco = w
+		}
+	}
+	inicio := (len(fundo) - len(bloco)) / 2
+
+	for i, l := range bloco {
+		y := inicio + i
+		if y < 0 || y >= len(out) {
+			continue
+		}
+		base := []rune(out[y])
+		x := (len(base) - larguraBloco) / 2
+		preenchido := l + strings.Repeat(" ", larguraBloco-Largura(l))
+		for k, ch := range []rune(preenchido) {
+			if p := x + k; p >= 0 && p < len(base) {
+				base[p] = ch
+			}
+		}
+		out[y] = string(base)
+	}
+	return out
+}

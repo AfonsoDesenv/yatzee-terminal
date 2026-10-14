@@ -75,7 +75,7 @@ func (s Screen) painelEsquerdo() []string {
 
 	return ui.Painel(w,
 		ui.Rotulado("ALVO", ui.Numero(s.partida.Alvo), w),
-		ui.Rotulado("VOCE", ui.Numero(s.partida.Pontos), w),
+		ui.Rotulado("VOCE", ui.Numero(s.parcial()), w),
 		ui.Separador,
 		fmt.Sprintf("%s  x  %s", ui.Numero(int64(fichas)), ui.Numero(int64(mult))),
 		ui.Separador,
@@ -86,6 +86,10 @@ func (s Screen) painelEsquerdo() []string {
 // mesa desenha a tela da rodada: painéis em cima, dados embaixo.
 func (s Screen) mesa(largura, altura int) string {
 	esquerda := s.painelEsquerdo()
+	// O painel da meta queima enquanto a contagem passa do alvo.
+	if s.chama != nil && s.phase == PhaseContando {
+		esquerda = fogo.Sobre(s.chama.Linhas(), esquerda)
+	}
 
 	const larguraRunas = 31
 	var caixas [][]string
@@ -139,16 +143,4 @@ func (s Screen) mesa(largura, altura int) string {
 	bloco = append(bloco, marcas.String(), rotulos.String())
 
 	return strings.Join(ui.CentralizaBloco(bloco, largura, altura), "\n")
-}
-
-// comemoracao desenha o fogo: contido no painel primeiro, na tela toda depois.
-func (s Screen) comemoracao(largura, altura int) string {
-	if s.chama == nil {
-		return s.mesa(largura, altura)
-	}
-	if s.largo {
-		return strings.Join(fogo.Sobre(s.chama.Linhas(), s.painelEsquerdo()), "\n")
-	}
-	chama := fogo.Sobre(s.chama.Linhas(), s.painelEsquerdo())
-	return strings.Join(ui.CentralizaBloco(chama, largura, altura), "\n")
 }

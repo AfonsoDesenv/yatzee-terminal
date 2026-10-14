@@ -21,8 +21,13 @@ import (
 const (
 	PassoPontuacao = 500 * time.Millisecond
 	QuadroFogo     = 50 * time.Millisecond
-	FogoNoPainel   = 1200 * time.Millisecond
-	FogoNaTela     = 1800 * time.Millisecond
+
+	// Depois que a conta cruza a meta, o painel queima por um tempo antes de
+	// a vitoria abrir. Sem esta pausa o fogo "durante o calculo" nao teria
+	// duracao nenhuma: o multiplicador so entra no ultimo passo, entao a
+	// travessia acontece junto com o fim da contagem.
+	FogoNoPainel = 1400 * time.Millisecond
+	DuracaoFogo  = 2500 * time.Millisecond
 )
 
 // Phase é onde a partida está. As fases de animação são estados próprios: é o
@@ -34,9 +39,7 @@ const (
 	PhaseRodada Phase = iota
 	// PhaseContando percorre a pontuação, um passo por vez.
 	PhaseContando
-	// PhaseComemorando queima a tela depois de bater a meta.
-	PhaseComemorando
-	// PhaseVitoria mostra o que a vitória pagou.
+	// PhaseVitoria mostra o que a vitória pagou, sobre a tela em chamas.
 	PhaseVitoria
 	// PhaseDerrota aparece quando as mãos acabam sem bater a meta.
 	PhaseDerrota
@@ -47,7 +50,7 @@ const (
 type (
 	tiquePontuacao struct{}
 	tiqueFogo      struct{}
-	espalhaFogo    struct{}
+	abreVitoria    struct{}
 	apagaFogo      struct{}
 )
 
@@ -57,12 +60,13 @@ type Screen struct {
 	partida regras.Partida
 	rnd     *rand.Rand
 
-	anim  animacao
-	chama *fogo.Fogo
-	largo bool // a chama já se espalhou para a tela toda
+	anim animacao
+	// pontosAntes é o acumulado antes da jogada em contagem. A tela mostra
+	// pontosAntes mais o que a contagem já rendeu, para o número subir junto
+	// com os passos em vez de pular de uma vez no fim.
+	pontosAntes int64
 
-	// Resultado da última jogada, para a tela mostrar enquanto conta.
-	ultima regras.Pontuacao
+	chama *fogo.Fogo
 
 	largura, altura int
 	theme           ui.Theme
@@ -95,10 +99,8 @@ func (s Screen) Phase() Phase { return s.phase }
 // Partida dá acesso ao estado do jogo, para teste.
 func (s Screen) Partida() regras.Partida { return s.partida }
 
-// Animando diz se a tela está no meio de uma animação e por isso muda.
-func (s Screen) Animando() bool {
-	return s.phase == PhaseContando || s.phase == PhaseComemorando
-}
+// Pegando diz se há chama acesa agora.
+func (s Screen) Pegando() bool { return s.chama != nil }
 
 // Title identifica a tela.
 func (s Screen) Title() string { return "jogo" }
@@ -106,9 +108,9 @@ func (s Screen) Title() string { return "jogo" }
 // Init não precisa de nada.
 func (s Screen) Init() tea.Cmd { return nil }
 
-// Update roteia teclas e tiques. A ordem importa: enquanto anima, o teclado é
-// ignorado, porque mexer no estado no meio da sequência que ela percorre
-// deixaria a tela inconsistente.
+// Update roteia teclas e tiques. Enquanto conta, o teclado é ignorado: mexer
+// no estado no meio da sequência que ela percorre deixaria a tela
+// inconsistente.
 func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -117,10 +119,34 @@ func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 
 	case tiquePontuacao:
 		return s.avanca()
-	case espalhaFogo:
-		return s.espalha()
+
+	case abreVitoria:
+		if s.phase != PhaseContando {
+			return s, nil
+		}
+		// A recompensa entra agora, nao ao sair da loja: e o saldo que a loja
+		// mostra e usa.
+		s.partida = s.partida.Premia()
+		s.phase = PhaseVitoria
+		// O fogo do painel da lugar a um que toma a tela inteira, por tras do
+		// modal.
+		s.chama = fogo.Novo(s.largura, s.altura-1, s.rnd)
+		return s, tea.Batch(
+			tique(QuadroFogo, tiqueFogo{}),
+			tique(DuracaoFogo, apagaFogo{}),
+		)
+
 	case tiqueFogo:
-		return s.queima()
+		if s.chama == nil {
+			return s, nil
+		}
+		s.chama.Passo()
+		if !s.chama.Vivo() {
+			s.chama = nil
+			return s, nil
+		}
+		return s, tique(QuadroFogo, tiqueFogo{})
+
 	case apagaFogo:
 		if s.chama != nil {
 			s.chama.Apagar()
@@ -128,7 +154,7 @@ func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
-		if s.Animando() {
+		if s.phase == PhaseContando {
 			return s, nil
 		}
 		return s.tecla(msg.String())
@@ -141,6 +167,7 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 	case PhaseVitoria:
 		if s.keys.Matches(k, s.keys.Confirm) {
 			s.phase = PhaseLoja
+			s.chama = nil
 		}
 		return s, nil
 
@@ -158,7 +185,6 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 		return s, nil
 	}
 
-	// PhaseRodada
 	switch {
 	case s.keys.Matches(k, s.keys.Back):
 		return s, ui.Back
@@ -167,9 +193,9 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 		if !s.partida.PodeEnviar() {
 			return s, nil
 		}
+		s.pontosAntes = s.partida.Pontos
 		var pont regras.Pontuacao
 		s.partida, pont = s.partida.Envia()
-		s.ultima = pont
 		s.anim = novaAnimacao(pont, s.partida.Dados)
 		s.phase = PhaseContando
 		return s, tique(PassoPontuacao, tiquePontuacao{})
@@ -190,64 +216,63 @@ func tique(d time.Duration, msg tea.Msg) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return msg })
 }
 
+// parcial é quanto o jogador tem enquanto a contagem corre: o acumulado de
+// antes mais o que a jogada já rendeu até aqui.
+func (s Screen) parcial() int64 {
+	if s.phase != PhaseContando {
+		return s.partida.Pontos
+	}
+	return s.pontosAntes + int64(s.anim.fichas*s.anim.mult)
+}
+
+// cruzouAMeta diz se o que já foi contado basta para bater o alvo. É o gatilho
+// do fogo no painel: ele pega no instante em que a conta passa da meta, e não
+// no fim da contagem.
+func (s Screen) cruzouAMeta() bool { return s.parcial() >= s.partida.Alvo }
+
 // avanca aplica um passo da contagem e decide o que vem depois dela.
 func (s Screen) avanca() (ui.Screen, tea.Cmd) {
 	if s.phase != PhaseContando {
 		return s, nil
 	}
 	s.anim = s.anim.avanca()
+
+	var cmds []tea.Cmd
+	// O painel pega fogo assim que a conta cruza a meta, no meio da contagem.
+	if s.chama == nil && s.cruzouAMeta() {
+		s.chama = fogo.Novo(larguraFogoPainel, alturaFogoPainel, s.rnd)
+		cmds = append(cmds, tique(QuadroFogo, tiqueFogo{}))
+	}
+
 	if !s.anim.acabou() {
-		return s, tique(PassoPontuacao, tiquePontuacao{})
+		cmds = append(cmds, tique(PassoPontuacao, tiquePontuacao{}))
+		return s, tea.Batch(cmds...)
 	}
 
 	switch {
 	case s.partida.Venceu():
-		s.phase = PhaseComemorando
-		s.largo = false
-		s.chama = fogo.Novo(larguraFogoPainel, alturaFogoPainel, s.rnd)
-		return s, tea.Batch(
-			tique(QuadroFogo, tiqueFogo{}),
-			tique(FogoNoPainel, espalhaFogo{}),
-		)
+		// Continua em PhaseContando com o painel em chamas: a vitoria abre
+		// depois, para o fogo no painel ter duracao visivel.
+		if s.chama == nil {
+			s.chama = fogo.Novo(larguraFogoPainel, alturaFogoPainel, s.rnd)
+			cmds = append(cmds, tique(QuadroFogo, tiqueFogo{}))
+		}
+		cmds = append(cmds, tique(FogoNoPainel, abreVitoria{}))
 	case s.partida.Perdeu():
 		s.phase = PhaseDerrota
-		return s, nil
+		s.chama = nil
 	default:
-		// Ainda há mão: rola os dados de novo para a jogada seguinte.
 		s.partida = s.partida.ProximaMao(s.rnd)
 		s.phase = PhaseRodada
-		return s, nil
+		s.chama = nil
 	}
+	return s, tea.Batch(cmds...)
 }
 
 const (
 	larguraFogoPainel = 34
 	alturaFogoPainel  = 11
 )
-
-// espalha troca a fogueira do painel por uma do tamanho da tela.
-func (s Screen) espalha() (ui.Screen, tea.Cmd) {
-	if s.phase != PhaseComemorando || s.largo {
-		return s, nil
-	}
-	s.largo = true
-	s.chama = fogo.Novo(s.largura, s.altura-1, s.rnd)
-	return s, tique(FogoNaTela, apagaFogo{})
-}
-
-// queima avança um quadro da chama e abre o modal quando ela morre.
-func (s Screen) queima() (ui.Screen, tea.Cmd) {
-	if s.phase != PhaseComemorando || s.chama == nil {
-		return s, nil
-	}
-	s.chama.Passo()
-	if !s.chama.Vivo() {
-		s.chama = nil
-		s.phase = PhaseVitoria
-		return s, nil
-	}
-	return s, tique(QuadroFogo, tiqueFogo{})
-}
 
 // View desenha a fase atual com a barra de ajuda no rodapé.
 func (s Screen) View() string {
@@ -257,20 +282,21 @@ func (s Screen) View() string {
 
 	switch s.phase {
 	case PhaseVitoria:
-		corpo = s.modalVitoria(s.largura, altura)
+		corpo = s.telaVitoria(s.largura, altura)
 		dicas = []string{"enter continua"}
 	case PhaseDerrota:
 		corpo = s.modalDerrota(s.largura, altura)
 		dicas = []string{"enter volta ao menu"}
 	case PhaseLoja:
 		corpo = s.loja(s.largura, altura)
-		dicas = []string{"enter continua"}
-	case PhaseComemorando:
-		corpo = s.comemoracao(s.largura, altura)
-		dicas = []string{"meta batida!"}
+		dicas = []string{"enter joga o proximo nivel"}
 	case PhaseContando:
 		corpo = s.mesa(s.largura, altura)
-		dicas = []string{"contando a jogada..."}
+		if s.cruzouAMeta() {
+			dicas = []string{"meta batida!"}
+		} else {
+			dicas = []string{"contando a jogada..."}
+		}
 	default:
 		corpo = s.mesa(s.largura, altura)
 		dicas = s.dicasRodada()

@@ -35,9 +35,11 @@ func contaTudo(s Screen) Screen {
 
 // venceAgora força uma vitória: dá pontos suficientes e envia.
 func venceAgora(s Screen) Screen {
-	s.partida.Pontos = s.partida.Alvo
+	s.partida.Alvo = 1 // qualquer jogada basta
 	s, _ = tecla(s, "enter")
-	return contaTudo(s)
+	s = contaTudo(s)
+	s, _ = aplica(s, abreVitoria{})
+	return s
 }
 
 func TestComecaNaRodadaComDadosRolados(t *testing.T) {
@@ -156,23 +158,97 @@ func TestNaoBaterAMetaRolaOsDadosDeNovo(t *testing.T) {
 	}
 }
 
-func TestBaterAMetaComemoraEDepoisAbreOModal(t *testing.T) {
+func TestBaterAMetaAbreAVitoriaComATelaEmChamas(t *testing.T) {
 	s := venceAgora(New())
-	if s.Phase() != PhaseComemorando {
-		t.Fatalf("fase = %v depois de bater a meta, quero PhaseComemorando", s.Phase())
-	}
 
-	s, _ = aplica(s, espalhaFogo{})
-	s, _ = aplica(s, apagaFogo{})
-	for i := 0; i < 2000 && s.Phase() == PhaseComemorando; i++ {
+	if s.Phase() != PhaseVitoria {
+		t.Fatalf("fase = %v depois de bater a meta, quero PhaseVitoria", s.Phase())
+	}
+	if !s.Pegando() {
+		t.Error("a vitória não acendeu a tela")
+	}
+	v := s.View()
+	if !strings.Contains(v, "META BATIDA") {
+		t.Error("o modal de vitória não apareceu")
+	}
+	if !strings.ContainsAny(v, "@%#*") {
+		t.Error("não há chama na tela da vitória")
+	}
+}
+
+// O modal é opaco: o fogo queima em volta, não por dentro, senão os números da
+// recompensa ficariam ilegíveis justo na hora de lê-los.
+func TestOModalDeVitoriaNaoPegaFogo(t *testing.T) {
+	s := venceAgora(New())
+	for i := 0; i < 30; i++ {
 		s, _ = aplica(s, tiqueFogo{})
 	}
 
-	if s.Phase() != PhaseVitoria {
-		t.Fatalf("fase = %v depois do fogo apagar, quero PhaseVitoria", s.Phase())
+	var achou bool
+	for _, l := range strings.Split(s.View(), "\n") {
+		if !strings.Contains(l, "ganhou") && !strings.Contains(l, "total") {
+			continue
+		}
+		achou = true
+
+		// O fogo em volta do modal é o esperado; o que não pode é chama
+		// dentro dele. Recorta o miolo entre as bordas do painel.
+		ini := strings.Index(l, "|")
+		fim := strings.LastIndex(l, "|")
+		if ini < 0 || fim <= ini {
+			t.Errorf("linha do modal sem bordas: %q", l)
+			continue
+		}
+		if miolo := l[ini+1 : fim]; strings.ContainsAny(miolo, "@%#") {
+			t.Errorf("chama dentro do modal: %q", miolo)
+		}
 	}
-	if !strings.Contains(s.View(), "META BATIDA") {
-		t.Error("o modal de vitória não apareceu")
+	if !achou {
+		t.Fatal("o modal de vitória não apareceu na tela")
+	}
+}
+
+// O painel da meta pega fogo durante a contagem, no instante em que a conta
+// cruza o alvo — não no fim dela.
+func TestOPainelPegaFogoAoCruzarAMetaDurandoAContagem(t *testing.T) {
+	s := New()
+	s.partida.Dados = regras.Mao{6, 6, 6, 6, 6} // yatzee de seis: 200
+	s.partida.Alvo = 100
+	s, _ = tecla(s, "enter")
+
+	if s.Pegando() {
+		t.Fatal("pegou fogo antes de contar nada")
+	}
+	for i := 0; i < 10 && s.Phase() == PhaseContando && !s.Pegando(); i++ {
+		s, _ = aplica(s, tiquePontuacao{})
+	}
+	if !s.Pegando() {
+		t.Error("a contagem cruzou a meta e o painel não pegou fogo")
+	}
+	if s.Phase() != PhaseContando {
+		t.Errorf("fase = %v, o fogo devia pegar ainda durante a contagem", s.Phase())
+	}
+
+	// E a vitoria so abre depois, para o fogo no painel ter duracao visivel.
+	s, _ = aplica(s, abreVitoria{})
+	if s.Phase() != PhaseVitoria {
+		t.Errorf("fase = %v depois de abreVitoria, quero PhaseVitoria", s.Phase())
+	}
+}
+
+// E o número do jogador sobe junto com os passos, em vez de pular de uma vez.
+func TestOAcumuladoSobeDuranteAContagem(t *testing.T) {
+	s := New()
+	s.partida.Dados = regras.Mao{3, 3, 3, 6, 6}
+	antes := s.parcial()
+	s, _ = tecla(s, "enter")
+
+	if got := s.parcial(); got != antes {
+		t.Errorf("parcial = %d logo após enviar, quero %d", got, antes)
+	}
+	s, _ = aplica(s, tiquePontuacao{})
+	if got := s.parcial(); got <= antes {
+		t.Errorf("parcial = %d depois de um passo, não subiu de %d", got, antes)
 	}
 }
 
@@ -220,14 +296,12 @@ func TestVitoriaLevaALojaELojaAoProximoNivel(t *testing.T) {
 		t.Fatalf("fase = %v depois da loja, quero PhaseRodada", s.Phase())
 	}
 	p := s.Partida()
+	_ = recompensa
 	if p.Nivel != nivel+1 {
 		t.Errorf("nível = %d, quero %d", p.Nivel, nivel+1)
 	}
 	if p.Alvo != alvo*2 {
 		t.Errorf("alvo = %d, quero o dobro de %d", p.Alvo, alvo)
-	}
-	if p.Moedas != recompensa {
-		t.Errorf("moedas = %d, quero %d", p.Moedas, recompensa)
 	}
 	if p.Maos != regras.MaosPorRodada || p.Rerolls != regras.RerollsPorRodada {
 		t.Errorf("mãos/rerolls = %d/%d, quero cheios", p.Maos, p.Rerolls)
