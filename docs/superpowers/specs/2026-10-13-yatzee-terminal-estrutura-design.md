@@ -42,11 +42,17 @@ desde agora.
 
 | Peça | Escolha | Motivo |
 |---|---|---|
-| Linguagem | Go 1.26 (`apt install golang-go`) | ~10 MB por sessão contra ~60 MB do Python; binário único sem runtime se um dia distribuir local |
-| TUI | Bubble Tea | Arquitetura Elm (model/update/view), testável sem terminal |
-| Estilo | Lip Gloss | Renderer por sessão, essencial no modo multi-cliente |
-| Componentes | Bubbles (`list`, `textinput`, `key`, `help`) | Evita reescrever lista, input e keybindings |
-| Servidor | Wish | Serve um app Bubble Tea como servidor SSH nativo, com a chave do cliente em mãos |
+| Linguagem | Go 1.27.2 | ~10 MB por sessão contra ~60 MB do Python; binário único sem runtime se um dia distribuir local |
+| TUI | `charm.land/bubbletea/v2` v2.1.0 | Arquitetura Elm (model/update/view), testável sem terminal |
+| Estilo | `charm.land/lipgloss/v2` v2.0.6 | Composição de layout e cor |
+| Input | `charm.land/bubbles/v2` v2.2.1 (só `textinput`) | O resto (menu, help) é feito à mão: menos API de terceiro pra carregar num jogo de 3 itens de menu |
+| Servidor | `charm.land/wish/v2` v2.0.5 + `charm.land/ssh` v0.4.3 | Serve um app Bubble Tea como servidor SSH nativo, com a chave do cliente em mãos |
+
+**Versões verificadas na prática**, não de memória: um probe descartável compilou
+e rodou o stack inteiro por SSH antes deste spec virar plano. O que a verificação
+contrariou está registrado em "Armadilhas confirmadas" no fim do documento — a v2
+mudou o domínio dos módulos para `charm.land`, `View()` passou a devolver
+`tea.View` e a lipgloss v2 não tem mais `Renderer`.
 
 O jogador não instala nada em nenhuma das opções de linguagem, porque o runtime
 roda no servidor. O critério de decisão foi custo por sessão no servidor.
@@ -83,20 +89,35 @@ Telas novas entram sem tocar nas existentes.
 type Screen interface {
     Init() tea.Cmd
     Update(tea.Msg) (Screen, tea.Cmd)
-    View() string
+    View() string // só a raiz devolve tea.View; telas devolvem string
     Title() string
 }
 
-// Navegação por mensagem, nunca por chamada direta entre telas.
-type PushMsg    struct{ Screen Screen }  // empilha
-type PopMsg     struct{}                 // volta uma
-type ReplaceMsg struct{ Screen Screen }  // troca o topo, sem deixar volta
-type QuitMsg    struct{}
+// Vocabulário de intenção: a tela diz o que quer, não como navegar.
+type ShowScoresMsg struct{}
+type StartGameMsg  struct{}
+type BackMsg       struct{}            // sai da tela atual
+type QuitMsg       struct{}
+type NameSetMsg    struct{ Name string } // nome aceito e gravado
 ```
 
 `Update` devolve `Screen` em vez de `tea.Model` para eliminar type assertion em
-cada tela. `ReplaceMsg` existe para a tela de nome: depois de se apresentar,
-ninguém deve poder voltar pra ela com `esc`.
+cada tela.
+
+Duas consequências dessa escolha, e elas são o coração da estrutura:
+
+**Nenhuma tela conhece outra tela.** A tela de menu não importa a de jogo; ela
+emite `StartGameMsg`. Só a raiz conhece o grafo de navegação e traduz intenção
+em empilhar, voltar ou trocar. É o que permite testar qualquer tela sem montar
+o resto do jogo, e é por isso que o vocabulário é de intenção em vez de um
+`PushMsg{Screen}` genérico: com a tela carregando a próxima dentro da mensagem,
+o grafo volta a se espalhar por todas elas.
+
+**Cada tela recebe só a dependência que usa**, não um objeto de sessão inteiro:
+a de scores recebe um `score.Store`, a de nome recebe `player.Store` mais a
+identidade. Além de deixar o teste trivial (um fake de uma interface de dois
+métodos), isso evita o ciclo de importação que apareceria se as telas
+dependessem do pacote `app`, que já depende delas.
 
 ### Telas
 
@@ -254,11 +275,23 @@ type Session struct {
     Identity player.Identity
     Players  player.Store
     Scores   score.Store
-    Rand     *rand.Rand         // por sessão, nunca o rand global
-    Renderer *lipgloss.Renderer // perfil de cor do cliente
-    Width    int
-    Height   int
+    Rand     *rand.Rand // por sessão, nunca o rand global
 }
+```
+
+Sem `Renderer`: a lipgloss v2 não tem mais esse conceito, porque o perfil de cor
+do cliente passou a ser resolvido pelo próprio programa Bubble Tea — o
+middleware do Wish injeta `TERM`, perfil e tamanho por sessão. Tamanho de tela
+também sai daqui: ele chega por `tea.WindowSizeMsg` e vive no model raiz, que é
+quem desenha.
+
+**Tamanho zero é um caso real, não teórico.** Um cliente pode anunciar um PTY de
+0x0 — foi o que aconteceu no probe — e aí o Bubble Tea não desenha nada. A raiz
+trata 0 como "desconhecido" e cai num padrão de 80x24, com piso de 40x10:
+
+```go
+// internal/ui/layout.go
+func Size(w, h int) (int, int) // 0 → 80x24; menor que o piso → piso
 ```
 
 ### Armazenamento de scores
@@ -292,6 +325,7 @@ Baratas agora, caras depois. Todas valem já nesta entrega.
 | RNG por sessão, injetado | `math/rand` global é compartilhado entre goroutines | Jogadores simultâneos interferem na sorte um do outro; nenhuma partida é reproduzível |
 | Zero estado mutável de pacote | N sessões no mesmo processo | Um jogador vê ou corrompe a partida do outro |
 | Tamanho e cor vindos da sessão, não de `os.Stdout` | Cada cliente SSH tem o próprio PTY | Layout quebrado para todos menos o primeiro cliente |
+| Fallback de tamanho quando o cliente anuncia 0x0 | Visto no probe, não é hipótese | Tela branca para esse cliente |
 | Identidade pela chave, não pelo IP | O Tunnel apaga o IP; CGNAT o compartilha | Jogadores se confundem entre si e perdem o nome ao trocar de rede |
 | Config por env var | Container atrás do Tunnel | Rebuild de imagem para mudar uma porta |
 
@@ -348,9 +382,10 @@ yatzee_terminal/
 │   │   ├── root.go             # model raiz: pilha de telas
 │   │   └── root_test.go        # navegação e identidade
 │   ├── ui/
-│   │   ├── screen.go           # interface Screen + mensagens de navegação
+│   │   ├── screen.go           # interface Screen + mensagens de intenção
 │   │   ├── theme.go            # estilos Lip Gloss num lugar só
-│   │   ├── keys.go             # keybindings + help
+│   │   ├── keys.go             # keybindings + barra de help
+│   │   ├── layout.go           # fallback de tamanho (0x0 → 80x24)
 │   │   ├── name/name.go        # pergunta o nome na primeira vez
 │   │   ├── menu/menu.go
 │   │   ├── scores/scores.go
@@ -396,6 +431,22 @@ yatzee_terminal/
 - Acento no nome (exige voltar a medir largura em colunas).
 - Se partida de convidado pode pontuar no placar, já que a identidade dele não
   persiste.
+
+## Armadilhas confirmadas
+
+Levantadas rodando o stack, não lendo documentação. Cada uma custaria tempo de
+depuração na execução do plano.
+
+| Armadilha | Realidade |
+|---|---|
+| Caminho dos módulos | A v2 mudou de `github.com/charmbracelet/*` para `charm.land/*/v2` |
+| `View()` | Devolve `tea.View` (via `tea.NewView`), não `string`; `AltScreen` é campo dela, não opção do programa |
+| Mensagem de tecla | `tea.KeyPressMsg`, não `tea.KeyMsg` |
+| `lipgloss.NewRenderer` | Não existe na v2 |
+| `bubbletea.MakeOptions` | **Não** chamar no handler do middleware: ele já aplica internamente, e chamar de novo duplica `WithInput`/`WithOutput` sobre a mesma sessão |
+| `wish.WithHostKeyPath` | Faz `chmod` no **diretório pai**, então falha em `/tmp` (root, sticky bit). Tem que ser um diretório nosso |
+| Tamanho do cliente | Pode chegar `0x0` com `EmulatedPty() == true`; sem fallback, nada é desenhado |
+| Testar TUI por pipe | O programa consulta capacidades do terminal e adia o frame; teste de tela se faz injetando mensagem no model, não por PTY falso |
 
 ## Nota operacional
 
