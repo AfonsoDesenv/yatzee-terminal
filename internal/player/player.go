@@ -32,11 +32,11 @@ var nameRE = regexp.MustCompile(`^[a-z0-9_-]+( [a-z0-9_-]+)?$`)
 // CleanName devolve o nome canônico ou ErrNameInvalid. É o único caminho para
 // um nome entrar no sistema, então nenhum chamador precisa lembrar de validar.
 func CleanName(s string) (string, error) {
-	// Verifica caracteres de controle no original antes de limpar
-	for _, r := range s {
-		if unicode.IsControl(r) {
-			return "", fmt.Errorf("%w: %s", ErrNameInvalid, NameRule())
-		}
+	// Caractere de controle é recusado ANTES do trim. Ao contrário: o
+	// TrimSpace removeria o "\n" de "afonso\n" e um nome com controle
+	// embutido passaria a válido.
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return "", fmt.Errorf("%w: caractere de controle", ErrNameInvalid)
 	}
 
 	s = strings.TrimSpace(s)

@@ -47,6 +47,7 @@ func TestCleanNameRejeita(t *testing.T) {
 		{"---", "sem alfanumérico"},
 		{"", "vazio"},
 		{"   ", "só espaço"},
+		{" ab ", "curto depois do trim"},
 		{"af\x1b[31monso", "ANSI embutido"},
 		{"afonso\n", "controle"},
 	}
@@ -68,7 +69,7 @@ func TestNameRuleMencionaOsLimites(t *testing.T) {
 
 func TestIdentityPersistent(t *testing.T) {
 	casos := []struct {
-		kind Kind
+		kind  Kind
 		quero bool
 	}{
 		{KindPubKey, true},
