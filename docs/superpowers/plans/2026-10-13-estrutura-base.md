@@ -3429,6 +3429,23 @@ func TestIdentityFromKeyUsaOFingerprint(t *testing.T) {
 	}
 }
 
+// O que importa nao e o gerador avancar, e sim cada sessao ter o SEU. Comparar
+// apenas os ids seria insuficiente: dois sorteios sequenciais de um gerador
+// global tambem diferem, entao um teste so de ids passaria justamente sob o
+// defeito que ele existe para pegar. A comparacao dos ponteiros e o que afirma
+// a propriedade de verdade.
+func TestCadaSessaoTemSeuGerador(t *testing.T) {
+	a := sessaoDeTeste(t)
+	b := sessaoDeTeste(t)
+
+	if a.Rand == b.Rand {
+		t.Fatal("as duas sessoes compartilham o mesmo gerador")
+	}
+	if GuestIdentity(a.Rand).ID == GuestIdentity(b.Rand).ID {
+		t.Error("duas sessoes geraram o mesmo id de convidado")
+	}
+}
+
 func TestGuestIdentityNaoPersisteENaoRepete(t *testing.T) {
 	rnd := rand.New(rand.NewPCG(1, 2))
 
