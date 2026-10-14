@@ -194,7 +194,7 @@ var nameRE = regexp.MustCompile(`^[a-z0-9_-]+( [a-z0-9_-]+)?$`)
 | Regra | Valor | Motivo |
 |---|---|---|
 | Caracteres | Apenas `a-z`, `0-9`, `-`, `_` | Whitelist, não blacklist: o que não está na lista não entra |
-| Maiúscula | Rejeitada, não convertida | Nome é definitivo: converter calado faria a pessoa que digitou "Afonso" descobrir no placar que virou "afonso" |
+| Maiúscula | Convertida na digitação pela tela, e recusada pelo validador | A tela baixa a caixa tecla por tecla, então quem digita "Afonso" lê "afonso" na hora — não há conversão escondida no envio de um nome que é definitivo. O validador continua recusando porque ele é a autoridade, e a tela não é o único caminho de entrada possível |
 | Espaço | No máximo um, e nunca nas pontas nem dobrado | O grupo opcional da regex expressa exatamente isso |
 | Comprimento | 3 a 16 caracteres | O placar precisa alinhar |
 | Conteúdo mínimo | Pelo menos uma letra ou dígito | Rejeita `___` e `---` |
@@ -327,6 +327,8 @@ serviço iniciado pelo systemd ou por container tem CWD imprevisível.
   `a b c` (dois espaços separados), ` ab ` (pontas), `joão` (acento), `___` (sem
   alfanumérico) e nome com ANSI embutido. `Claim` de nome já gravado devolve
   `ErrNameTaken`; a tela preserva o texto digitado ao mostrar o erro.
+- **Tela de nome**: digitar `A` deixa `a` no campo; o validador recusar maiúscula
+  continua testado à parte, porque a tela não é a autoridade da regra.
 - **Persistência**: round-trip de salvar e ler, ordenação do `Top`, e escrita
   concorrente de duas sessões sem corromper o arquivo.
 
