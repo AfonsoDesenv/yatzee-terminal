@@ -130,26 +130,6 @@ func TestViewUsaAltScreenEOTopoDaPilha(t *testing.T) {
 	}
 }
 
-// Empilhar não pode compartilhar o array de trás com a pilha anterior, senão
-// uma tela empilhada depois de um Back sobrescreve o histórico.
-func TestPilhaNaoCompartilhaArrayDeTras(t *testing.T) {
-	m := rootDeTeste(t, telaFake{nome: "menu", cmd: ui.ShowScores})
-	m = passo(m, tea.KeyPressMsg{})
-	antesDoBack := m.Top().Title()
-	m = passo(m, ui.BackMsg{})
-	m = passo(m, ui.StartGameMsg{})
-
-	if antesDoBack != "scores" {
-		t.Fatalf("topo antes do back = %q, quero scores", antesDoBack)
-	}
-	if got := m.Top().Title(); got != "jogo" {
-		t.Errorf("topo = %q, quero jogo", got)
-	}
-	if m.Depth() != 2 {
-		t.Errorf("profundidade = %d, quero 2", m.Depth())
-	}
-}
-
 // O Bubble Tea chama Init só no model raiz. Uma tela empilhada precisa ser
 // armada pela raiz, senão o placar fica em "carregando..." para sempre.
 func TestEmpilharPlacarArmaOInitDaTela(t *testing.T) {
@@ -167,5 +147,23 @@ func TestEmpilharPlacarArmaOInitDaTela(t *testing.T) {
 	m = passo(m, cmd())
 	if strings.Contains(m.View().Content, "carregando") {
 		t.Errorf("depois de aplicar o comando o placar continua carregando:\n%s", m.View().Content)
+	}
+}
+
+// Empilhar não pode compartilhar o array de trás com a pilha anterior, senão
+// uma tela empilhada depois de um Back sobrescreve o histórico.
+func TestPilhaNaoCompartilhaArrayDeTras(t *testing.T) {
+	m := rootDeTeste(t, telaFake{nome: "menu"})
+
+	// Mantém o model antigo vivo: é nele que um array compartilhado apareceria.
+	antes, _ := m.Update(ui.ShowScoresMsg{}) // profundidade 2, topo "scores"
+	depois, _ := antes.(Root).Update(ui.BackMsg{})
+	depois, _ = depois.(Root).Update(ui.StartGameMsg{})
+
+	if got := antes.(Root).Top().Title(); got != "scores" {
+		t.Errorf("a pilha foi compartilhada: empilhar depois do back sobrescreveu o historico (topo antigo = %q)", got)
+	}
+	if got := depois.(Root).Top().Title(); got != "jogo" {
+		t.Errorf("topo novo = %q, quero jogo", got)
 	}
 }

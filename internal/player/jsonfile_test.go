@@ -104,8 +104,8 @@ func TestTouchAtualizaLastSeen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.LastSeen.Before(p.LastSeen) {
-		t.Errorf("LastSeen andou pra trás: %v < %v", got.LastSeen, p.LastSeen)
+	if !got.LastSeen.After(p.LastSeen) {
+		t.Errorf("LastSeen nao avancou: %v nao e depois de %v", got.LastSeen, p.LastSeen)
 	}
 	if !got.FirstSeen.Equal(p.FirstSeen) {
 		t.Errorf("Touch mexeu no FirstSeen: %v != %v", got.FirstSeen, p.FirstSeen)

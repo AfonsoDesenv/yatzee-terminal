@@ -101,6 +101,12 @@ func (s *JSONStore) save(data scoresFile) error {
 		tmp.Close()
 		return fmt.Errorf("escrever temporário: %w", err)
 	}
+	// Sync antes do rename: sem ele, numa queda de energia o rename pode ser
+	// gravado antes dos dados e deixar um arquivo vazio ou truncado.
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("sincronizar temporário: %w", err)
+	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("fechar temporário: %w", err)
 	}
