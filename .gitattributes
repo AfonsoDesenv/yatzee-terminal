@@ -1,0 +1,4 @@
+# Terminadores de linha: LF em todo texto, sempre.
+# Um edit em Python no Windows converteu este repo para CRLF uma vez e
+# transformou uma mudanca de 6 linhas num diff de 7141.
+* text=auto eol=lf
