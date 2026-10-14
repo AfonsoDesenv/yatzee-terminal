@@ -25,6 +25,13 @@ Valem para toda task. Violar qualquer uma destas é motivo de rejeição na revi
   "command not found".
 - **Module path:** `github.com/afonsodesenv/yatzee-terminal`.
 - **Imports v2 vêm de `charm.land`**, nunca de `github.com/charmbracelet`. O caminho antigo existe e compila na v1, com API diferente — errar aqui gera erro de tipo confuso.
+- **Versão pinada na primeira importação, sempre explícita.** O `go mod tidy` remove do `go.mod` toda dependência que nenhum código importa ainda — foi o que aconteceu com `bubbles`, `wish`, `ssh` e `crypto` depois da Task 5. Então a task que **primeiro** importa cada uma precisa pedir a versão verificada por extenso, nunca um `go get` sem versão (que resolveria para a mais recente e poderia trazer uma API diferente da verificada):
+
+  ```bash
+  go get charm.land/bubbles/v2/textinput@v2.2.1   # Task 7
+  go get charm.land/wish/v2@v2.0.5 charm.land/wish/v2/bubbletea@v2.0.5 \
+         charm.land/ssh@v0.4.3 golang.org/x/crypto@latest   # Task 12
+  ```
 - **Zero estado mutável de pacote.** Nenhuma variável global que mude em runtime. Várias sessões vivem no mesmo processo.
 - **Nenhum uso de `math/rand` global.** Só `*rand.Rand` por sessão (`math/rand/v2`).
 - **Nenhuma tela importa outra tela.** Nenhum pacote `ui/*` importa `internal/app`.
