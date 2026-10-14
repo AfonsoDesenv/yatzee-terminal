@@ -215,3 +215,25 @@ func TestPilhaNaoCompartilhaArrayDeTras(t *testing.T) {
 		t.Errorf("topo da versão nova = %q, quero segunda", got)
 	}
 }
+
+// A tela empilhada no meio da partida nunca recebe o WindowSizeMsg do arranque
+// nem o da janela parada. Sem a raiz entregar o tamanho na hora do push, ela
+// desenha com o padrão e só se encaixa quando a pessoa redimensiona o
+// terminal — que foi exatamente o que apareceu na tela do jogo.
+func TestTelaEmpilhadaJaNasceComOTamanhoDaTela(t *testing.T) {
+	m := NewRoot(telaFake{nome: "menu"})
+	m = passo(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	var medida telaMedidora
+	m, _ = m.pushWith(medida)
+
+	topo, ok := m.Top().(telaMedidora)
+	if !ok {
+		t.Fatalf("topo = %T, quero telaMedidora", m.Top())
+	}
+	w, h := m.Size()
+	if topo.w != w-2 || topo.h != h-2 {
+		t.Errorf("a tela nova nasceu com %dx%d, quero %dx%d (a tela menos a moldura)",
+			topo.w, topo.h, w-2, h-2)
+	}
+}

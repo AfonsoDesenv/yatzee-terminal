@@ -6,7 +6,6 @@ import (
 
 	"github.com/afonsodesenv/yatzee-terminal/internal/regras"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
-	"github.com/afonsodesenv/yatzee-terminal/internal/ui/fogo"
 )
 
 // passo é uma etapa da contagem. Fichas e mult são ambos somados: a combinação
@@ -135,18 +134,11 @@ func (s Screen) painelDireito() []string {
 // ficam no meio do espaço que sobra — em vez de tudo espremido num bloco
 // centralizado, que deixava buracos esquisitos em tela grande.
 func (s Screen) mesa(largura, altura int) string {
-	esquerda := s.painelEsquerdo()
-	// O painel da meta queima a partir do passo que cruza o alvo.
-	if s.chama != nil && s.phase == PhaseContando {
-		esquerda = fogo.Sobre(s.chama.Linhas(), esquerda)
-	}
-
-	meio := largura - larguraEsquerda - larguraDireita - 4 - 2*espacoPainel
+	conteudo := largura - 2*ui.Margem
+	meio := conteudo - larguraEsquerda - larguraDireita - 4 - 2*espacoPainel
 	if meio < 20 {
 		meio = 20
 	}
-	topo := ui.LadoALado(espacoPainel, esquerda, s.painelRunas(meio), s.painelDireito())
-
 	// Mesa de dados, centralizada na largura.
 	var ds [][]string
 	for _, v := range s.partida.Dados {
@@ -169,22 +161,41 @@ func (s Screen) mesa(largura, altura int) string {
 
 	var mesa []string
 	for _, l := range ui.LadoALado(2, ds...) {
-		mesa = append(mesa, ui.Centraliza(l, largura))
+		mesa = append(mesa, ui.Centraliza(l, conteudo))
 	}
 	mesa = append(mesa,
-		ui.Centraliza(marcas.String(), largura),
-		ui.Centraliza(rotulos.String(), largura),
+		ui.Centraliza(marcas.String(), conteudo),
+		ui.Centraliza(rotulos.String(), conteudo),
 	)
 
-	// Painéis colados no alto, dados no meio do resto.
-	linhas := append([]string{}, topo...)
-	sobra := altura - len(topo) - len(mesa)
-	for i := 0; i < sobra/2; i++ {
-		linhas = append(linhas, "")
+	// Tudo é composto numa tela de posição fixa: cada painel tem seu lugar,
+	// os dados ficam no meio do que sobra. O fogo entra atrás do painel da
+	// meta, também em posição fixa — se ele substituísse o bloco do painel, a
+	// largura maior empurraria o resto da linha de lugar a cada quadro.
+	esquerdo := s.painelEsquerdo()
+	xEsq := ui.Margem
+	xRunas := xEsq + larguraEsquerda + 2 + espacoPainel
+	xDir := xRunas + meio + 2 + espacoPainel
+
+	yTopo := ui.MargemY
+	tela := ui.Tela(largura, altura)
+	yMesa := yTopo + len(esquerdo) + (altura-yTopo-len(esquerdo)-len(mesa))/2
+
+	if s.chama != nil {
+		// A chama é mais larga que o painel e sobra para os lados: à esquerda
+		// cabe na margem invisível, à direita some sob o painel das runas, que
+		// é composto depois e opaco.
+		// Na vertical a base da chama fica na borda de baixo do painel, para
+		// o fogo subir atraves dele em vez de brotar solto embaixo.
+		xFogo := xEsq + (larguraEsquerda+2-larguraFogoPainel)/2
+		yFogo := yTopo + len(esquerdo) - alturaFogoPainel
+		tela = ui.Compoe(tela, s.chama.Linhas(), xFogo, yFogo, false)
 	}
-	linhas = append(linhas, mesa...)
-	for len(linhas) < altura {
-		linhas = append(linhas, "")
-	}
-	return strings.Join(linhas[:altura], "\n")
+
+	// O painel da meta entra transparente para o fogo queimar por dentro dele.
+	tela = ui.Compoe(tela, esquerdo, xEsq, yTopo, s.chama != nil)
+	tela = ui.Compoe(tela, s.painelRunas(meio), xRunas, yTopo, false)
+	tela = ui.Compoe(tela, s.painelDireito(), xDir, yTopo, false)
+	tela = ui.Compoe(tela, mesa, xEsq, yMesa, false)
+	return strings.Join(tela, "\n")
 }

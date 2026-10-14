@@ -173,3 +173,51 @@ func SobreOpaco(fundo, bloco []string) []string {
 	}
 	return out
 }
+
+// Margem é o respiro invisível entre a borda da tela e o conteúdo. Além de
+// afastar o desenho da moldura, é o espaço onde o fogo do painel cabe sem
+// empurrar nada de lugar.
+const Margem = 6
+
+// MargemY e o mesmo respiro na vertical. E o que da altura para a chama subir
+// acima do painel: sem ele o fogo comecaria na primeira linha e nao teria para
+// onde ir.
+const MargemY = 2
+
+// Tela devolve uma superfície em branco para compor.
+func Tela(largura, altura int) []string {
+	linhas := make([]string, altura)
+	vazia := strings.Repeat(" ", largura)
+	for i := range linhas {
+		linhas[i] = vazia
+	}
+	return linhas
+}
+
+// Compoe desenha um bloco sobre a tela numa posição fixa. Com transparente, os
+// espaços do bloco deixam ver o que está atrás — é o que permite o fogo
+// aparecer por dentro de um painel sem apagar suas bordas.
+//
+// Compor em posição fixa, em vez de substituir o bloco, é o que mantém o
+// layout parado: um fogo mais largo que o painel mudaria a largura do bloco e
+// empurraria todo o resto da linha.
+func Compoe(tela []string, bloco []string, x, y int, transparente bool) []string {
+	out := append([]string(nil), tela...)
+	for i, linha := range bloco {
+		ly := y + i
+		if ly < 0 || ly >= len(out) {
+			continue
+		}
+		base := []rune(out[ly])
+		for k, ch := range []rune(linha) {
+			if transparente && ch == ' ' {
+				continue
+			}
+			if p := x + k; p >= 0 && p < len(base) {
+				base[p] = ch
+			}
+		}
+		out[ly] = string(base)
+	}
+	return out
+}

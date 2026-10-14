@@ -37,8 +37,11 @@ func (m Root) Depth() int { return len(m.stack) }
 // Size devolve o tamanho já normalizado.
 func (m Root) Size() (int, int) { return m.width, m.height }
 
-// Init arranca a tela da base.
-func (m Root) Init() tea.Cmd { return m.Top().Init() }
+// Init arranca a tela da base. O tamanho do terminal chega sozinho: o Bubble
+// Tea manda um WindowSizeMsg quando o programa começa.
+func (m Root) Init() tea.Cmd {
+	return m.Top().Init()
+}
 
 // Update roteia. A ordem importa: tamanho e saída global primeiro, intenções
 // de navegação depois, e só então a mensagem desce para a tela do topo.
@@ -125,7 +128,19 @@ func (m Root) pop() Root {
 // pushWith empilha e arma a tela. O Bubble Tea chama Init só no model raiz, uma
 // vez; sem devolver o Init da tela empilhada aqui, uma tela que carregue algo
 // no Init ficaria presa para sempre no estado inicial.
+//
+// O tamanho também tem de ser entregue na mão: o Bubble Tea só manda
+// WindowSizeMsg quando o programa começa e quando a janela muda. Uma tela
+// empilhada no meio da partida nunca viu nenhum dos dois e desenharia com o
+// tamanho padrão até a pessoa redimensionar o terminal.
 func (m Root) pushWith(s ui.Screen) (Root, tea.Cmd) {
+	s, cmdTamanho := dimensiona(s, m.width-2, m.height-2)
 	m = m.push(s)
-	return m, s.Init()
+	return m, tea.Batch(cmdTamanho, s.Init())
+}
+
+// dimensiona entrega o tamanho atual a uma tela recém-criada.
+func dimensiona(s ui.Screen, largura, altura int) (ui.Screen, tea.Cmd) {
+	next, cmd := s.Update(tea.WindowSizeMsg{Width: largura, Height: altura})
+	return next, cmd
 }
