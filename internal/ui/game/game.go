@@ -70,6 +70,9 @@ type Screen struct {
 
 	// vitrine são as runas à venda no nível atual.
 	vitrine []regras.Runa
+	// sel é onde o foco da loja está: focoContinuar ou uma das vitrines. Só a
+	// loja usa, mas mora aqui porque Screen é o estado inteiro da partida.
+	sel int
 
 	largura, altura int
 	theme           ui.Theme
@@ -172,6 +175,10 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 			s.phase = PhaseLoja
 			s.chama = nil
 			s.vitrine = sorteiaVitrine(s.rnd)
+			// Abre na primeira runa, não no botão de continuar: a loja existe
+			// para olhar o que está à venda, e a caixa de texto já nasce
+			// dizendo o que a runa em foco faz.
+			s.sel = focoPrimeiraRuna
 		}
 		return s, nil
 
@@ -182,15 +189,22 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 		return s, nil
 
 	case PhaseLoja:
+		// As quatro setas andam pelo mesmo anel. O botão fica à esquerda das
+		// runas na tela, então esquerda/direita é o movimento natural; cima e
+		// baixo seguem junto para nenhuma seta ficar morta na mão de quem
+		// estiver com os dedos no outro lado do teclado.
 		switch {
+		case s.keys.Matches(k, s.keys.Left), s.keys.Matches(k, s.keys.Up):
+			s = s.move(-1)
+		case s.keys.Matches(k, s.keys.Right), s.keys.Matches(k, s.keys.Down):
+			s = s.move(1)
 		case s.keys.Matches(k, s.keys.Confirm):
-			s.partida = s.partida.ProximoNivel(s.rnd)
-			s.phase = PhaseRodada
-		default:
-			// Dígito compra a runa daquela vitrine.
-			if len(k) == 1 && k[0] >= '1' && k[0] <= '3' {
-				s = s.compra(int(k[0] - '1'))
+			if s.sel == focoContinuar {
+				s.partida = s.partida.ProximoNivel(s.rnd)
+				s.phase = PhaseRodada
+				return s, nil
 			}
+			s = s.compra(s.sel - focoPrimeiraRuna)
 		}
 		return s, nil
 	}
@@ -293,13 +307,13 @@ func (s Screen) View() string {
 	switch s.phase {
 	case PhaseVitoria:
 		corpo = s.telaVitoria(s.largura, altura)
-		dicas = []string{"enter continua"}
+		dicas = []string{"espaco continua"}
 	case PhaseDerrota:
 		corpo = s.modalDerrota(s.largura, altura)
-		dicas = []string{"enter volta ao menu"}
+		dicas = []string{"espaco volta ao menu"}
 	case PhaseLoja:
 		corpo = s.loja(s.largura, altura)
-		dicas = []string{"enter joga o proximo nivel"}
+		dicas = []string{"setas escolhem", "espaco confirma"}
 	case PhaseContando:
 		corpo = s.mesa(s.largura, altura)
 		if s.cruzouAMeta() {
@@ -320,13 +334,42 @@ func (s Screen) dicasRodada() []string {
 	if s.partida.PodeRerolar() {
 		d = append(d, "r reroll")
 	}
-	return append(d, "enter envia", "esc menu")
+	return append(d, "espaco envia", "esc menu")
 }
 
 // PrecoRuna é quanto custa uma runa na loja. Valor único por enquanto: a
 // diferença de poder entre as básicas é pequena, e preço variável só faria
 // sentido com runas de forças diferentes.
 const PrecoRuna = 5
+
+// Os focos da loja, na ordem em que as setas passam por eles. O botão de
+// continuar é o primeiro porque é o que fica mais à esquerda na tela: andar
+// com a seta tem de bater com o que o olho vê.
+const (
+	focoContinuar    = 0
+	focoPrimeiraRuna = 1
+)
+
+// focos é quantas paradas o anel tem.
+func (s Screen) focos() int { return focoPrimeiraRuna + len(s.vitrine) }
+
+// move anda com o foco, dando a volta nas pontas: com quatro paradas, parar
+// na borda faria a pessoa voltar o caminho todo para chegar ao outro lado.
+func (s Screen) move(passo int) Screen {
+	n := s.focos()
+	s.sel = ((s.sel+passo)%n + n) % n
+	return s
+}
+
+// emFoco devolve a runa sob o foco. O bool é falso no botão de continuar, que
+// não é runa nenhuma.
+func (s Screen) emFoco() (regras.Runa, bool) {
+	i := s.sel - focoPrimeiraRuna
+	if i < 0 || i >= len(s.vitrine) {
+		return regras.Runa{}, false
+	}
+	return s.vitrine[i], true
+}
 
 // sorteiaVitrine escolhe três runas distintas do catálogo.
 func sorteiaVitrine(rnd *rand.Rand) []regras.Runa {

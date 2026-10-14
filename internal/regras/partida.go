@@ -150,11 +150,15 @@ func (p Partida) Compra(r Runa, preco int) Partida {
 	return p
 }
 
+// ProximoAlvo é a meta do nível seguinte. Existe para a loja poder avisar o
+// que vem pela frente sem repetir a regra do dobro por conta própria.
+func (p Partida) ProximoAlvo() int64 { return p.Alvo * 2 }
+
 // ProximoNivel dobra a meta e devolve tudo cheio de novo. Não mexe nas moedas:
 // quem credita é Premia, na vitória.
 func (p Partida) ProximoNivel(rnd *rand.Rand) Partida {
 	p.Nivel++
-	p.Alvo *= 2
+	p.Alvo = p.ProximoAlvo()
 	p.Pontos = 0
 	p.Maos = MaosPorRodada
 	p.Rerolls = RerollsPorRodada

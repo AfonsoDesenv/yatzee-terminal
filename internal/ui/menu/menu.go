@@ -120,6 +120,6 @@ func (s Screen) View() string {
 	}
 
 	tela := ui.CentralizaBloco(conteudo, s.largura, s.altura-1)
-	ajuda := ui.Centraliza(s.keys.Help([]string{"↑↓ move", "enter escolhe", "q sai"}), s.largura)
+	ajuda := ui.Centraliza(s.keys.Help([]string{"setas movem", "espaco escolhe", "q sai"}), s.largura)
 	return strings.Join(append(tela, ajuda), "\n")
 }

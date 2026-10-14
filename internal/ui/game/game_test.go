@@ -15,12 +15,20 @@ func aplica(s Screen, msg tea.Msg) (Screen, tea.Cmd) {
 	return next.(Screen), cmd
 }
 
+// nomeadas são as teclas que não são um caractere digitável.
+var nomeadas = map[string]rune{
+	"enter": tea.KeyEnter,
+	"esc":   tea.KeyEscape,
+	"space": tea.KeySpace,
+	"left":  tea.KeyLeft,
+	"right": tea.KeyRight,
+	"up":    tea.KeyUp,
+	"down":  tea.KeyDown,
+}
+
 func tecla(s Screen, k string) (Screen, tea.Cmd) {
-	if k == "enter" {
-		return aplica(s, tea.KeyPressMsg{Code: tea.KeyEnter})
-	}
-	if k == "esc" {
-		return aplica(s, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if code, ok := nomeadas[k]; ok {
+		return aplica(s, tea.KeyPressMsg{Code: code})
 	}
 	return aplica(s, tea.KeyPressMsg{Code: rune(k[0]), Text: k})
 }
@@ -343,12 +351,14 @@ func TestVitoriaLevaALojaELojaAoProximoNivel(t *testing.T) {
 	alvo := s.Partida().Alvo
 	recompensa := s.Partida().Recompensa()
 
-	s, _ = tecla(s, "enter")
+	s, _ = tecla(s, "space")
 	if s.Phase() != PhaseLoja {
 		t.Fatalf("fase = %v depois de continuar, quero PhaseLoja", s.Phase())
 	}
 
-	s, _ = tecla(s, "enter")
+	// A loja abre com o foco numa runa; continuar é um botão à parte.
+	s, _ = tecla(s, "left")
+	s, _ = tecla(s, "space")
 	if s.Phase() != PhaseRodada {
 		t.Fatalf("fase = %v depois da loja, quero PhaseRodada", s.Phase())
 	}

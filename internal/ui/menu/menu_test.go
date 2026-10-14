@@ -108,3 +108,16 @@ func TestViewMostraOsItens(t *testing.T) {
 		}
 	}
 }
+
+// O confirmar do menu vem do mapa de teclas, então espaço escolhe o item
+// igual ao enter: foi a tecla que o jogo adotou.
+func TestEspacoEscolheNoMenu(t *testing.T) {
+	s := New()
+	_, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("espaço no menu não produziu comando")
+	}
+	if _, ok := cmd().(ui.StartGameMsg); !ok {
+		t.Errorf("espaço no primeiro item emitiu %T, quero ui.StartGameMsg", cmd())
+	}
+}

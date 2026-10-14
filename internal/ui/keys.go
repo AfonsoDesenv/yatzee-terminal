@@ -7,6 +7,8 @@ import "strings"
 type Keys struct {
 	Up        []string
 	Down      []string
+	Left      []string
+	Right     []string
 	Confirm   []string
 	Back      []string
 	Toggle    []string
@@ -18,9 +20,13 @@ type Keys struct {
 // DefaultKeys devolve o mapa do spec.
 func DefaultKeys() Keys {
 	return Keys{
-		Up:        []string{"up", "k"},
-		Down:      []string{"down", "j"},
-		Confirm:   []string{"enter"},
+		Up:    []string{"up", "k"},
+		Down:  []string{"down", "j"},
+		Left:  []string{"left", "h"},
+		Right: []string{"right", "l"},
+		// Espaço é o confirmar do jogo; enter continua valendo porque é o que
+		// a mão procura sozinha, e aceitar os dois não custa nada.
+		Confirm:   []string{"space", "enter"},
 		Back:      []string{"esc"},
 		Toggle:    []string{"tab"},
 		Quit:      []string{"q"},
