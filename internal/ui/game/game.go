@@ -23,22 +23,26 @@ const (
 // fases, e esta tela é dona das duas, o que mantém o estado da partida num
 // lugar só quando as mecânicas chegarem.
 type Screen struct {
-	phase Phase
-	round roundView
-	shop  shopView
-	theme ui.Theme
-	keys  ui.Keys
+	phase           Phase
+	round           rodada
+	shop            loja
+	largura, altura int
+	theme           ui.Theme
+	keys            ui.Keys
 }
 
 // New começa uma partida na fase de rodada.
 func New() Screen {
 	theme := ui.NewTheme()
+	keys := ui.DefaultKeys()
 	return Screen{
-		phase: PhaseRound,
-		round: roundView{theme: theme},
-		shop:  shopView{theme: theme},
-		theme: theme,
-		keys:  ui.DefaultKeys(),
+		phase:   PhaseRound,
+		round:   novaRodada(theme, keys),
+		shop:    novaLoja(theme),
+		largura: ui.DefaultWidth,
+		altura:  ui.DefaultHeight,
+		theme:   theme,
+		keys:    keys,
 	}
 }
 
@@ -51,36 +55,46 @@ func (s Screen) Title() string { return "jogo" }
 // Init não precisa de nada ainda.
 func (s Screen) Init() tea.Cmd { return nil }
 
-// Update alterna as fases e trata a volta.
+// Update alterna as fases, marca dados e trata a volta.
 func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
-	key, ok := msg.(tea.KeyPressMsg)
-	if !ok {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		s.largura, s.altura = msg.Width, msg.Height
 		return s, nil
-	}
-	pressed := key.String()
 
-	switch {
-	case s.keys.Matches(pressed, s.keys.Toggle):
-		if s.phase == PhaseRound {
-			s.phase = PhaseShop
-		} else {
-			s.phase = PhaseRound
+	case tea.KeyPressMsg:
+		pressed := msg.String()
+		switch {
+		case s.keys.Matches(pressed, s.keys.Toggle):
+			if s.phase == PhaseRound {
+				s.phase = PhaseShop
+			} else {
+				s.phase = PhaseRound
+			}
+		case s.keys.Matches(pressed, s.keys.Back):
+			return s, ui.Back
+		default:
+			// Dígito marca o dado para rerolar: a seleção é por número, não
+			// por cursor, então dá para escolher 1, 3 e 5 em três toques.
+			if s.phase == PhaseRound && len(pressed) == 1 && pressed[0] >= '1' && pressed[0] <= '9' {
+				s.round = s.round.alterna(int(pressed[0] - '0'))
+			}
 		}
-	case s.keys.Matches(pressed, s.keys.Back):
-		return s, ui.Back
 	}
 	return s, nil
 }
 
-// View desenha a fase atual.
+// View desenha a fase atual com a barra de ajuda no rodapé.
 func (s Screen) View() string {
-	b := &strings.Builder{}
+	var corpo string
+	var dicas []string
 	if s.phase == PhaseRound {
-		b.WriteString(s.round.render())
+		corpo = s.round.render(s.largura, s.altura-1)
+		dicas = s.round.ajuda()
 	} else {
-		b.WriteString(s.shop.render())
+		corpo = s.shop.render(s.largura, s.altura-1)
+		dicas = s.shop.ajuda()
 	}
-	b.WriteString("\n")
-	b.WriteString(s.keys.Help([]string{"tab alterna rodada e loja", "esc volta ao menu"}))
-	return s.theme.Panel.Render(b.String())
+	ajuda := ui.Centraliza(s.keys.Help(dicas), s.largura)
+	return strings.Join([]string{corpo, ajuda}, "\n")
 }

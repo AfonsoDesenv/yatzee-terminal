@@ -102,7 +102,7 @@ func TestEscNaoEmiteNada(t *testing.T) {
 
 func TestViewMostraOsItens(t *testing.T) {
 	v := New().View()
-	for _, termo := range []string{"yatzee", "novo jogo", "sair"} {
+	for _, termo := range []string{"Y A T Z E E", "NOVO JOGO", "SAIR"} {
 		if !strings.Contains(v, termo) {
 			t.Errorf("View() não contém %q:\n%s", termo, v)
 		}

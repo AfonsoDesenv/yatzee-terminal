@@ -37,8 +37,8 @@ func TestViewSegueAFase(t *testing.T) {
 	// "rodada" ou "loja" passaria em qualquer fase — inclusive se o View
 	// ignorasse a fase e sempre desenhasse a rodada, que é justamente o
 	// comportamento que este teste existe para garantir.
-	const textoRodada = "as mecânicas de dados entram aqui"
-	const textoLoja = "os itens entram aqui"
+	const textoRodada = "REROLLS" // painel que so a rodada tem
+	const textoLoja = "MOEDAS"    // painel que so a loja tem
 
 	s := New()
 	v := s.View()
