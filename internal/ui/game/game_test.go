@@ -176,6 +176,33 @@ func TestBaterAMetaAbreAVitoriaComATelaEmChamas(t *testing.T) {
 	}
 }
 
+// As moedas entram quando a vitória é anunciada, não ao sair da loja: é o
+// saldo que a loja mostra e vai usar para vender.
+func TestAVitoriaCreditaAsMoedas(t *testing.T) {
+	s := New()
+	s.partida.Alvo = 1
+	antes := s.Partida().Moedas
+
+	s, _ = tecla(s, "enter")
+	s = contaTudo(s)
+	premiada := s.Partida()
+	s, _ = aplica(s, abreVitoria{})
+
+	esperado := antes + premiada.Recompensa()
+	if got := s.Partida().Moedas; got != esperado {
+		t.Errorf("moedas = %d depois da vitória, quero %d", got, esperado)
+	}
+
+	// E a loja mostra esse saldo, não o de antes.
+	s, _ = tecla(s, "enter")
+	if s.Phase() != PhaseLoja {
+		t.Fatalf("fase = %v, quero PhaseLoja", s.Phase())
+	}
+	if !strings.Contains(s.View(), ui.Numero(int64(esperado))) {
+		t.Errorf("a loja não mostra o saldo de %d moedas", esperado)
+	}
+}
+
 // O modal é opaco: o fogo queima em volta, não por dentro, senão os números da
 // recompensa ficariam ilegíveis justo na hora de lê-los.
 func TestOModalDeVitoriaNaoPegaFogo(t *testing.T) {
@@ -212,18 +239,23 @@ func TestOModalDeVitoriaNaoPegaFogo(t *testing.T) {
 // cruza o alvo — não no fim dela.
 func TestOPainelPegaFogoAoCruzarAMetaDurandoAContagem(t *testing.T) {
 	s := New()
-	s.partida.Dados = regras.Mao{6, 6, 6, 6, 6} // yatzee de seis: 200
-	s.partida.Alvo = 100
+	s.partida.Dados = regras.Mao{6, 6, 6, 6, 6}
+	// Alvo baixo de propósito: a conta cruza já no primeiro dado, muito antes
+	// do último passo. Com um alvo alto a travessia coincidiria com o fim da
+	// contagem, e o teste não distinguiria "fogo durante" de "fogo no fim".
+	s.partida.Alvo = 1
 	s, _ = tecla(s, "enter")
 
 	if s.Pegando() {
 		t.Fatal("pegou fogo antes de contar nada")
 	}
-	for i := 0; i < 10 && s.Phase() == PhaseContando && !s.Pegando(); i++ {
-		s, _ = aplica(s, tiquePontuacao{})
-	}
+
+	s, _ = aplica(s, tiquePontuacao{})
 	if !s.Pegando() {
-		t.Error("a contagem cruzou a meta e o painel não pegou fogo")
+		t.Error("a conta cruzou a meta no primeiro passo e o painel não pegou fogo")
+	}
+	if s.anim.acabou() {
+		t.Fatal("a contagem acabou num passo só: o teste não prova nada")
 	}
 	if s.Phase() != PhaseContando {
 		t.Errorf("fase = %v, o fogo devia pegar ainda durante a contagem", s.Phase())
