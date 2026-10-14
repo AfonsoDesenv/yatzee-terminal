@@ -65,10 +65,10 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case ui.ShowScoresMsg:
-		return m.push(scores.New(m.sess.Scores)), nil
+		return m.pushWith(scores.New(m.sess.Scores))
 
 	case ui.StartGameMsg:
-		return m.push(game.New()), nil
+		return m.pushWith(game.New())
 
 	case ui.BackMsg:
 		return m.pop(), nil
@@ -77,7 +77,7 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Troca em vez de empilhar: depois de se apresentar, esc não pode
 		// levar de volta pra tela de nome.
 		m.sess.Identity.Name = msg.Name
-		return m.replace(menu.New(m.sess.Identity.Name)), nil
+		return m.replaceWith(menu.New(m.sess.Identity.Name))
 	}
 
 	top := len(m.stack) - 1
@@ -123,4 +123,17 @@ func (m Root) replace(s ui.Screen) Root {
 	m = m.copyStack()
 	m.stack[len(m.stack)-1] = s
 	return m
+}
+
+// pushWith empilha e arma a tela. O Bubble Tea chama Init só no model raiz, uma
+// vez; sem devolver o Init da tela empilhada aqui, ela nunca carregaria nada.
+func (m Root) pushWith(s ui.Screen) (Root, tea.Cmd) {
+	m = m.push(s)
+	return m, s.Init()
+}
+
+// replaceWith troca a tela do topo e a arma, pelo mesmo motivo do pushWith.
+func (m Root) replaceWith(s ui.Screen) (Root, tea.Cmd) {
+	m = m.replace(s)
+	return m, s.Init()
 }

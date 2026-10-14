@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -146,5 +147,25 @@ func TestPilhaNaoCompartilhaArrayDeTras(t *testing.T) {
 	}
 	if m.Depth() != 2 {
 		t.Errorf("profundidade = %d, quero 2", m.Depth())
+	}
+}
+
+// O Bubble Tea chama Init só no model raiz. Uma tela empilhada precisa ser
+// armada pela raiz, senão o placar fica em "carregando..." para sempre.
+func TestEmpilharPlacarArmaOInitDaTela(t *testing.T) {
+	m := rootDeTeste(t, telaFake{nome: "menu"})
+
+	next, cmd := m.Update(ui.ShowScoresMsg{})
+	m = next.(Root)
+	if cmd == nil {
+		t.Fatal("empilhar o placar não devolveu o Init da tela")
+	}
+	if !strings.Contains(m.View().Content, "carregando") {
+		t.Fatalf("antes da carga o placar deveria estar carregando:\n%s", m.View().Content)
+	}
+
+	m = passo(m, cmd())
+	if strings.Contains(m.View().Content, "carregando") {
+		t.Errorf("depois de aplicar o comando o placar continua carregando:\n%s", m.View().Content)
 	}
 }
