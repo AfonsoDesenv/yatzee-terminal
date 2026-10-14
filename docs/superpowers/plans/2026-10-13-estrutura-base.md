@@ -1225,10 +1225,10 @@ import (
 // largura zero nada é desenhado. O fallback é o que evita tela branca.
 func TestSizeFallback(t *testing.T) {
 	casos := []struct {
-		nome       string
-		w, h       int
-		queroW     int
-		queroH     int
+		nome   string
+		w, h   int
+		queroW int
+		queroH int
 	}{
 		{"zero virou default", 0, 0, DefaultWidth, DefaultHeight},
 		{"negativo virou default", -5, -1, DefaultWidth, DefaultHeight},
@@ -1356,14 +1356,14 @@ import "strings"
 // Keys é o mapa de teclas, num lugar só para a barra de help nunca mentir
 // sobre o que o jogo aceita.
 type Keys struct {
-	Up      []string
-	Down    []string
-	Confirm []string
-	Back    []string
-	Toggle  []string
-	Quit    []string
+	Up        []string
+	Down      []string
+	Confirm   []string
+	Back      []string
+	Toggle    []string
+	Quit      []string
 	ForceQuit []string
-	theme   Theme
+	theme     Theme
 }
 
 // DefaultKeys devolve o mapa do spec.
