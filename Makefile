@@ -1,12 +1,9 @@
 GO := $(HOME)/.local/go/bin/go
 
-.PHONY: run serve test test-race vet build
+.PHONY: run test test-race vet build
 
 run:
 	$(GO) run ./cmd/yatzee
-
-serve:
-	$(GO) run ./cmd/yatzee serve
 
 test:
 	$(GO) test ./...

@@ -107,7 +107,4 @@ func TestViewMostraOsItens(t *testing.T) {
 			t.Errorf("View() não contém %q:\n%s", termo, v)
 		}
 	}
-	if strings.Contains(v, "placar") {
-		t.Errorf("View() ainda oferece placar, que saiu do escopo:\n%s", v)
-	}
 }

@@ -95,7 +95,7 @@ func TestBackNaBaseNaoDesempilha(t *testing.T) {
 
 // O Bubble Tea chama Init só uma vez, no model raiz. Sem a raiz devolver o
 // Init da tela empilhada, uma tela que carrega algo fica presa para sempre no
-// estado inicial — foi o que aconteceu com a tela de placar.
+// estado inicial. Vale para toda tela futura que precise carregar no Init.
 func TestPushArmaOInitDaTelaEmpilhada(t *testing.T) {
 	type initMsg struct{}
 	armada := telaFake{

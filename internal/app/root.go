@@ -120,8 +120,8 @@ func (m Root) pop() Root {
 }
 
 // pushWith empilha e arma a tela. O Bubble Tea chama Init só no model raiz, uma
-// vez; sem devolver o Init da tela empilhada aqui, ela nunca carregaria nada —
-// é o defeito que deixou a tela de placar presa em "carregando" antes.
+// vez; sem devolver o Init da tela empilhada aqui, uma tela que carregue algo
+// no Init ficaria presa para sempre no estado inicial.
 func (m Root) pushWith(s ui.Screen) (Root, tea.Cmd) {
 	m = m.push(s)
 	return m, s.Init()
