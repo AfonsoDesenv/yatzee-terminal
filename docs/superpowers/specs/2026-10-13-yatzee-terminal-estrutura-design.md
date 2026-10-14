@@ -174,8 +174,8 @@ var ErrNameTaken = errors.New("nome já está em uso")
 type Store interface {
     Get(ctx context.Context, id string) (Player, bool, error)
     // Claim grava id→nome se o nome estiver livre, senão devolve ErrNameTaken.
-    // A verificação e a escrita acontecem sob o mesmo lock: duas sessões
-    // reivindicando o mesmo nome no mesmo instante, uma só ganha.
+    // Uma chamada só em vez de Existe+Grava porque é menos código, não porque
+    // resolve concorrência: colisão simultânea está postergada.
     Claim(ctx context.Context, id, name string) (Player, error)
     Touch(ctx context.Context, id string) error // atualiza LastSeen
 }
@@ -183,15 +183,29 @@ type Store interface {
 
 ### Nome
 
-Único, definitivo e primeiro que chegar leva. Regras de validação, aplicadas
-pelo pacote `player` (não pela UI, para valerem igual em qualquer entrada):
+Único, definitivo e primeiro que chegar leva. A validação mora no pacote
+`player`, não na tela, para valer igual em qualquer entrada — e uma regex
+expressa quase tudo, aplicada depois de remover os espaços das pontas:
+
+```go
+var nameRE = regexp.MustCompile(`^[A-Za-z0-9_-]+( [A-Za-z0-9_-]+)?$`)
+```
 
 | Regra | Valor | Motivo |
 |---|---|---|
-| Comprimento | 3 a 16 colunas de exibição | O placar precisa alinhar; largura medida com `lipgloss.Width`, não `len`, por causa de acento e emoji |
-| Espaços nas pontas | Removidos | `"afonso "` e `"afonso"` são a mesma pessoa |
+| Caracteres | Apenas `A-Z`, `a-z`, `0-9`, `-`, `_` | Whitelist, não blacklist: o que não está na lista não entra |
+| Espaço | No máximo um, e nunca nas pontas nem dobrado | O grupo opcional da regex expressa exatamente isso |
+| Comprimento | 3 a 16 caracteres | O placar precisa alinhar |
+| Conteúdo mínimo | Pelo menos uma letra ou dígito | Rejeita `___` e `---` |
 | Unicidade | Case-insensitive | Impede que "Afonso" e "afonso" coexistam e se passem um pelo outro; a grafia original é preservada na exibição |
-| Caracteres de controle e ANSI | Rejeitados | Nome é renderizado no placar: uma sequência de escape dentro dele quebra o layout de todos ou falsifica a tela |
+
+Duas consequências do ASCII puro que valem ser ditas em voz alta: **"João" e
+"Ação" são rejeitados** — se quiser liberar acento depois, é trocar a classe da
+regex por letras Unicode, e aí o comprimento volta a precisar de
+`lipgloss.Width` em vez de `len`. E o whitelist torna a regra anti-ANSI
+redundante: sequência de escape não sobrevive a `[A-Za-z0-9_-]`. De quebra,
+barrar não-ASCII fecha a porta pra impersonação por homóglifo, o truque de
+registrar "аfonso" com um "а" cirílico que desenha igual ao latino.
 
 A chave de unicidade é o nome normalizado (minúsculo, sem espaços nas pontas);
 `Player.Name` guarda o que a pessoa digitou. Erro de nome em uso não é falha do
@@ -306,12 +320,11 @@ serviço iniciado pelo systemd ou por container tem CWD imprevisível.
 - **Identidade**: tela inicial é Name quando o ID é desconhecido e Menu quando
   conhecido; convidado não é persistido; `Replace` não deixa volta pra tela de
   nome.
-- **Nome**: cada regra de validação com seu caso de rejeição (curto, longo, só
-  espaço, com ANSI embutido); `Claim` do mesmo nome em grafia diferente devolve
-  `ErrNameTaken`; a tela preserva o texto digitado ao mostrar o erro.
-- **Corrida de `Claim`**: duas goroutines reivindicando o mesmo nome ao mesmo
-  tempo — exatamente uma vence e a outra recebe `ErrNameTaken`. Rodar com
-  `-race`.
+- **Nome**: tabela de casos contra a regex — aceita `afo_nso-1` e `Afonso Dev`,
+  rejeita `ab`, nome de 17, `a  b` (dois espaços), `a b c` (dois espaços
+  separados), ` ab `, `João`, `___`, e nome com ANSI embutido. `Claim` do mesmo
+  nome em grafia diferente devolve `ErrNameTaken`; a tela preserva o texto
+  digitado ao mostrar o erro.
 - **Persistência**: round-trip de salvar e ler, ordenação do `Top`, e escrita
   concorrente de duas sessões sem corromper o arquivo.
 
@@ -373,7 +386,10 @@ yatzee_terminal/
 - Mecânicas: dados, categorias de pontuação, estrutura de rodadas.
 - Economia e itens da loja.
 - Scores globais e banco de dados.
+- **Dois jogadores reivindicando o mesmo nome no mesmo instante.** A garantia de
+  verdade é índice único no banco, então isso casa com a troca do JSON por banco.
 - Trocar o nome depois de escolhido, e o que fazer com nome de jogador inativo.
+- Acento no nome (exige voltar a medir largura em colunas).
 - Se partida de convidado pode pontuar no placar, já que a identidade dele não
   persiste.
 
