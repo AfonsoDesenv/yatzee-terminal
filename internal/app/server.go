@@ -66,7 +66,8 @@ func Serve(ctx context.Context) error {
 			bm.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 				model, err := sessionModel(s, cfg, players, scores)
 				if err != nil {
-					wish.Errorln(s, "não consegui abrir o jogo:", err)
+					log.Printf("abrir sessão: %v", err)
+					wish.Errorln(s, "não consegui abrir o jogo agora, tente de novo")
 					return nil, nil
 				}
 				// MakeOptions não vai aqui: o middleware já a aplica, e
@@ -117,10 +118,20 @@ func sessionModel(s ssh.Session, cfg Config, players player.Store, scores score.
 	if id.ID == "" {
 		// Sem chave: convidado, com ID sorteado pelo gerador da sessão.
 		sess.Identity = GuestIdentity(sess.Rand)
-	} else if p, ok, err := players.Get(ctx, id.ID); err == nil && ok {
-		sess.Identity.Name = p.Name
-		// Falha em marcar presença não justifica recusar o jogador.
-		_ = players.Touch(ctx, id.ID)
+	} else {
+		p, ok, err := players.Get(ctx, id.ID)
+		switch {
+		case err != nil:
+			// Não recusa a conexão por falha de leitura — é um jogo, não um
+			// cofre — mas registra. Um players.json corrompido faria todo
+			// jogador que volta ver a tela de nome outra vez, e sem este log
+			// o operador não teria sinal nenhum de que isso está acontecendo.
+			log.Printf("ler identidade %s: %v", id.ID, err)
+		case ok:
+			sess.Identity.Name = p.Name
+			// Falha em marcar presença não justifica recusar o jogador.
+			_ = players.Touch(ctx, id.ID)
+		}
 	}
 
 	return NewRoot(sess, FirstScreen(sess)), nil

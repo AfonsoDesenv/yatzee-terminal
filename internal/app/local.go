@@ -43,9 +43,10 @@ func PlayLocal(ctx context.Context) error {
 	// apenas aos stores, e um SIGTERM não encerraria a partida local.
 	prog := tea.NewProgram(NewRoot(sess, FirstScreen(sess)), tea.WithContext(ctx))
 	if _, err := prog.Run(); err != nil {
-		// Parar por SIGTERM/ctrl+c é saída deliberada, não falha: o supervisor
-		// lê exit 1 como crash.
-		if errors.Is(err, tea.ErrProgramKilled) {
+		// Um desligamento que nós pedimos pelo contexto (SIGTERM) é saída
+		// deliberada, não falha: o supervisor lê exit 1 como crash. Um kill por
+		// outra causa continua sendo erro.
+		if errors.Is(err, tea.ErrProgramKilled) && ctx.Err() != nil {
 			return nil
 		}
 		return fmt.Errorf("rodar o jogo: %w", err)
