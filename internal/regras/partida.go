@@ -8,7 +8,7 @@ const (
 	RerollsPorRodada = 3
 
 	// AlvoInicial é a meta do primeiro nível; cada nível dobra.
-	AlvoInicial = 2000
+	AlvoInicial = 300
 
 	// Recompensas de vitória, em moedas.
 	MoedasPorVitoria        = 3

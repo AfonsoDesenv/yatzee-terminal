@@ -16,7 +16,8 @@ func TestIdentifica(t *testing.T) {
 		{"corrida fora de ordem", Mao{5, 3, 1, 4, 2}, Sequencia},
 		{"tres iguais", Mao{6, 6, 6, 1, 3}, Trinca},
 		{"dois iguais", Mao{5, 5, 1, 2, 3}, Par},
-		{"dois pares vira par", Mao{1, 1, 2, 2, 5}, Par},
+		{"dois pares", Mao{1, 1, 2, 2, 5}, DoisPares},
+		{"um par so", Mao{5, 5, 1, 2, 4}, Par},
 		{"nada", Mao{1, 2, 3, 4, 6}, Nada},
 	}
 	for _, c := range casos {
@@ -55,6 +56,21 @@ func TestSequenciaNaoAceitaRepetido(t *testing.T) {
 	}
 }
 
+// Dois pares e um par sao coisas distintas: ler um pelo outro muda o
+// multiplicador de 2 para 4 e dobra o valor da jogada.
+func TestDoisParesNaoSeConfundeComPar(t *testing.T) {
+	if got := Identifica(Mao{1, 1, 2, 2, 5}); got != DoisPares {
+		t.Errorf("1-1-2-2-5 identificou %s, quero DOIS PARES", got.Nome())
+	}
+	if got := Identifica(Mao{1, 1, 3, 4, 5}); got != Par {
+		t.Errorf("1-1-3-4-5 identificou %s, quero PAR", got.Nome())
+	}
+	// Full house tambem tem dois grupos, mas um deles e trinca.
+	if got := Identifica(Mao{3, 3, 3, 6, 6}); got != FullHouse {
+		t.Errorf("3-3-3-6-6 identificou %s, quero FULL HOUSE", got.Nome())
+	}
+}
+
 func TestBaseDeCadaCombinacao(t *testing.T) {
 	casos := []struct {
 		c      Combinacao
@@ -62,6 +78,7 @@ func TestBaseDeCadaCombinacao(t *testing.T) {
 		mult   int
 	}{
 		{Par, 4, 2},
+		{DoisPares, 4, 4},
 		{Trinca, 5, 4},
 		{Sequencia, 10, 4},
 		{FullHouse, 5, 5},
@@ -91,6 +108,7 @@ func TestAvaliaSomaOsDadosNasFichas(t *testing.T) {
 		{"yatzee de um", Mao{1, 1, 1, 1, 1}, 10 + 5, 5, 75},
 		{"trinca de tres", Mao{3, 3, 3, 2, 6}, 5 + 17, 4, 88},
 		{"par de um", Mao{1, 1, 2, 3, 4}, 4 + 11, 2, 30},
+		{"dois pares", Mao{1, 1, 2, 2, 5}, 4 + 11, 4, 60},
 		{"corrida de baixo", Mao{1, 2, 3, 4, 5}, 10 + 15, 4, 100},
 		{"nada", Mao{1, 2, 3, 4, 6}, 0 + 16, 1, 16},
 	}

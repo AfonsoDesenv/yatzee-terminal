@@ -18,6 +18,7 @@ const (
 	// dados entra em toda jogada.
 	Nada Combinacao = iota
 	Par
+	DoisPares
 	Trinca
 	Sequencia
 	FullHouse
@@ -30,6 +31,8 @@ func (c Combinacao) Nome() string {
 	switch c {
 	case Par:
 		return "PAR"
+	case DoisPares:
+		return "DOIS PARES"
 	case Trinca:
 		return "TRINCA"
 	case Sequencia:
@@ -50,6 +53,8 @@ func (c Combinacao) Base() (fichas, mult int) {
 	switch c {
 	case Par:
 		return 4, 2
+	case DoisPares:
+		return 4, 4
 	case Trinca:
 		return 5, 4
 	case Sequencia:
@@ -91,6 +96,8 @@ func Identifica(m Mao) Combinacao {
 		return Sequencia
 	case repeticoes[0] == 3:
 		return Trinca
+	case repeticoes[0] == 2 && len(repeticoes) > 1 && repeticoes[1] == 2:
+		return DoisPares
 	case repeticoes[0] == 2:
 		return Par
 	default:
