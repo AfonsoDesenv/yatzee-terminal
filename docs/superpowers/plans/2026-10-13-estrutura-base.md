@@ -3570,9 +3570,19 @@ func sessionModel(s ssh.Session, cfg Config, players player.Store, scores score.
 	if id.ID == "" {
 		// Sem chave: convidado, com ID sorteado pelo gerador da sessão.
 		sess.Identity = GuestIdentity(sess.Rand)
-	} else if p, ok, err := players.Get(ctx, id.ID); err == nil && ok {
-		sess.Identity.Name = p.Name
-		_ = players.Touch(ctx, id.ID)
+	} else {
+		p, ok, err := players.Get(ctx, id.ID)
+		switch {
+		case err != nil:
+			// Nao recusa a conexao por falha de leitura — e um jogo, nao um
+			// cofre — mas registra. Um players.json corrompido faria todo
+			// jogador que volta ver a tela de nome outra vez, e sem este log
+			// o operador nao teria sinal nenhum de que isso esta acontecendo.
+			log.Printf("ler identidade %s: %v", id.ID, err)
+		case ok:
+			sess.Identity.Name = p.Name
+			_ = players.Touch(ctx, id.ID)
+		}
 	}
 
 	return NewRoot(sess, FirstScreen(sess)), nil
