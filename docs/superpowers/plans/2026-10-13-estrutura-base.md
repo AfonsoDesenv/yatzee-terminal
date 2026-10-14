@@ -2318,11 +2318,6 @@ func TestCursorAndaEParaNasPontas(t *testing.T) {
 		t.Fatalf("cursor inicial = %d, quero 0", s.Cursor())
 	}
 
-	s, _ = tecla(s, "up") // já no topo, não deve passar do limite
-	if s.Cursor() != 0 {
-		t.Errorf("cursor após up no topo = %d, quero 0", s.Cursor())
-	}
-
 	s, _ = tecla(s, "down")
 	if s.Cursor() != 1 {
 		t.Errorf("cursor após down = %d, quero 1", s.Cursor())
@@ -2338,6 +2333,19 @@ func TestCursorAndaEParaNasPontas(t *testing.T) {
 	s, _ = tecla(s, "k")
 	if s.Cursor() != 1 {
 		t.Errorf("cursor após k = %d, quero 1", s.Cursor())
+	}
+
+	// "up" literal tem que mover de verdade antes de o teste do limite
+	// significar algo: se o mapa de teclas perdesse "up" e ficasse só com
+	// "k", um "up" no topo continuaria "parando" em 0 por não fazer nada.
+	s, _ = tecla(s, "up")
+	if s.Cursor() != 0 {
+		t.Errorf("cursor após up = %d, quero 0", s.Cursor())
+	}
+
+	s, _ = tecla(s, "up") // agora sim: já no topo, não deve passar do limite
+	if s.Cursor() != 0 {
+		t.Errorf("cursor após up no topo = %d, quero 0", s.Cursor())
 	}
 }
 
