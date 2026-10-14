@@ -167,3 +167,60 @@ func TestPilhaNaoCompartilhaArrayDeTras(t *testing.T) {
 		t.Errorf("topo novo = %q, quero jogo", got)
 	}
 }
+
+// Um cliente que anuncia 0x0 deixaria o renderer do Bubble Tea sem células. A
+// raiz reemite o tamanho corrigido num comando, que o laço do Bubble Tea
+// entrega de volta e redimensiona o renderer.
+func TestWindowSizeZeroReemiteTamanhoNormalizado(t *testing.T) {
+	m := rootDeTeste(t, telaFake{nome: "menu"})
+
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 0, Height: 0})
+	if cmd == nil {
+		t.Fatal("0x0 não produziu comando com o tamanho corrigido")
+	}
+	got, ok := cmd().(tea.WindowSizeMsg)
+	if !ok {
+		t.Fatalf("comando produziu %T, quero tea.WindowSizeMsg", cmd())
+	}
+	if got.Width != ui.DefaultWidth || got.Height != ui.DefaultHeight {
+		t.Errorf("tamanho reemitido = %dx%d, quero %dx%d", got.Width, got.Height, ui.DefaultWidth, ui.DefaultHeight)
+	}
+
+	// A mensagem reemitida não gera outra: sem laço.
+	_, again := m.Update(got)
+	if again != nil {
+		t.Errorf("tamanho normalizado reemitiu de novo: %v", again())
+	}
+}
+
+func TestWindowSizeNormalNaoProduzComando(t *testing.T) {
+	m := rootDeTeste(t, telaFake{nome: "menu"})
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	if cmd != nil {
+		t.Errorf("tamanho normal produziu comando: %v", cmd())
+	}
+}
+
+// telaMedidora guarda o último WindowSizeMsg recebido.
+type telaMedidora struct{ w, h *int }
+
+func (t telaMedidora) Init() tea.Cmd { return nil }
+func (t telaMedidora) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
+	if s, ok := msg.(tea.WindowSizeMsg); ok {
+		*t.w, *t.h = s.Width, s.Height
+	}
+	return t, nil
+}
+func (t telaMedidora) View() string  { return "medidora" }
+func (t telaMedidora) Title() string { return "medidora" }
+
+func TestWindowSizeChegaATelaDoTopoNormalizado(t *testing.T) {
+	var w, h int
+	m := rootDeTeste(t, telaMedidora{w: &w, h: &h})
+
+	m = passo(m, tea.WindowSizeMsg{Width: 0, Height: 0}) // passo aplica o reemitido
+	if w != ui.DefaultWidth || h != ui.DefaultHeight {
+		t.Errorf("tela recebeu %dx%d, quero %dx%d", w, h, ui.DefaultWidth, ui.DefaultHeight)
+	}
+	_ = m
+}

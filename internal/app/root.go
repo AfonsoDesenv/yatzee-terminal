@@ -51,8 +51,18 @@ func (m Root) Init() tea.Cmd { return m.Top().Init() }
 func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = ui.Size(msg.Width, msg.Height)
-		return m, nil
+		w, h := ui.Size(msg.Width, msg.Height)
+		m.width, m.height = w, h
+		if w != msg.Width || h != msg.Height {
+			// O renderer só se redimensiona com um WindowSizeMsg que passe pelo
+			// laço do Bubble Tea. Um cliente SSH que anuncia 0x0 deixaria o
+			// renderer vazio, então reemitimos o tamanho corrigido. Sem laço: o
+			// tamanho normalizado é ponto fixo de ui.Size, então a mensagem
+			// reemitida não cai neste ramo de novo — e é ela que chega às telas.
+			return m, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
+		}
+		// Tamanho já normalizado: a tela do topo pode se organizar com ele.
+		return m.updateTop(tea.WindowSizeMsg{Width: w, Height: h})
 
 	case tea.KeyPressMsg:
 		// Sai de qualquer lugar, sem passar pela tela. Vem do mapa de teclas,
@@ -80,6 +90,11 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.replaceWith(menu.New(m.sess.Identity.Name))
 	}
 
+	return m.updateTop(msg)
+}
+
+// updateTop entrega a mensagem à tela do topo, sem mexer na pilha anterior.
+func (m Root) updateTop(msg tea.Msg) (tea.Model, tea.Cmd) {
 	top := len(m.stack) - 1
 	next, cmd := m.stack[top].Update(msg)
 	m = m.copyStack()
