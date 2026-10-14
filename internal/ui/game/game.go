@@ -68,6 +68,9 @@ type Screen struct {
 
 	chama *fogo.Fogo
 
+	// vitrine são as runas à venda no nível atual.
+	vitrine []regras.Runa
+
 	largura, altura int
 	theme           ui.Theme
 	keys            ui.Keys
@@ -168,6 +171,7 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 		if s.keys.Matches(k, s.keys.Confirm) {
 			s.phase = PhaseLoja
 			s.chama = nil
+			s.vitrine = sorteiaVitrine(s.rnd)
 		}
 		return s, nil
 
@@ -178,9 +182,15 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 		return s, nil
 
 	case PhaseLoja:
-		if s.keys.Matches(k, s.keys.Confirm) {
+		switch {
+		case s.keys.Matches(k, s.keys.Confirm):
 			s.partida = s.partida.ProximoNivel(s.rnd)
 			s.phase = PhaseRodada
+		default:
+			// Dígito compra a runa daquela vitrine.
+			if len(k) == 1 && k[0] >= '1' && k[0] <= '3' {
+				s = s.compra(int(k[0] - '1'))
+			}
 		}
 		return s, nil
 	}
@@ -196,7 +206,7 @@ func (s Screen) tecla(k string) (ui.Screen, tea.Cmd) {
 		s.pontosAntes = s.partida.Pontos
 		var pont regras.Pontuacao
 		s.partida, pont = s.partida.Envia()
-		s.anim = novaAnimacao(pont, s.partida.Dados)
+		s.anim = novaAnimacao(pont, s.partida.Dados, s.partida.Runas)
 		s.phase = PhaseContando
 		return s, tique(PassoPontuacao, tiquePontuacao{})
 
@@ -311,4 +321,36 @@ func (s Screen) dicasRodada() []string {
 		d = append(d, "r reroll")
 	}
 	return append(d, "enter envia", "esc menu")
+}
+
+// PrecoRuna é quanto custa uma runa na loja. Valor único por enquanto: a
+// diferença de poder entre as básicas é pequena, e preço variável só faria
+// sentido com runas de forças diferentes.
+const PrecoRuna = 5
+
+// sorteiaVitrine escolhe três runas distintas do catálogo.
+func sorteiaVitrine(rnd *rand.Rand) []regras.Runa {
+	baralho := append([]regras.Runa{}, regras.Catalogo...)
+	rnd.Shuffle(len(baralho), func(i, j int) {
+		baralho[i], baralho[j] = baralho[j], baralho[i]
+	})
+	return baralho[:3]
+}
+
+// compra leva a runa da vitrine, se houver saldo e espaço, e tira o item da
+// prateleira para não ser comprado duas vezes.
+func (s Screen) compra(i int) Screen {
+	if i < 0 || i >= len(s.vitrine) {
+		return s
+	}
+	r := s.vitrine[i]
+	if r.Letra == "" || !s.partida.PodeComprar(PrecoRuna) {
+		return s
+	}
+	s.partida = s.partida.Compra(r, PrecoRuna)
+
+	nova := append([]regras.Runa{}, s.vitrine...)
+	nova[i] = regras.Runa{} // vendida
+	s.vitrine = nova
+	return s
 }

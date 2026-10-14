@@ -29,6 +29,9 @@ type Partida struct {
 
 	Dados    Mao
 	Marcados [DadosPorMao]bool
+
+	// Runas em jogo, na ordem em que disparam.
+	Runas []Runa
 }
 
 // NovaPartida começa no primeiro nível, com os dados já rolados.
@@ -101,7 +104,7 @@ func (p Partida) Envia() (Partida, Pontuacao) {
 	if !p.PodeEnviar() {
 		return p, Pontuacao{}
 	}
-	pont := Avalia(p.Dados)
+	pont := AvaliaCom(p.Dados, p.Runas)
 	p.Pontos += int64(pont.Total())
 	p.Maos--
 	return p, pont
@@ -129,6 +132,21 @@ func (p Partida) Recompensa() int {
 // sai da loja: é o saldo que a loja usa.
 func (p Partida) Premia() Partida {
 	p.Moedas += p.Recompensa()
+	return p
+}
+
+// PodeComprar diz se cabe mais uma runa e o saldo cobre o preço.
+func (p Partida) PodeComprar(preco int) bool {
+	return len(p.Runas) < MaxRunas && p.Moedas >= preco
+}
+
+// Compra guarda a runa e desconta o preço.
+func (p Partida) Compra(r Runa, preco int) Partida {
+	if !p.PodeComprar(preco) {
+		return p
+	}
+	p.Moedas -= preco
+	p.Runas = append(append([]Runa{}, p.Runas...), r)
 	return p
 }
 

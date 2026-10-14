@@ -9,8 +9,8 @@ import (
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui/fogo"
 )
 
-// passo é uma etapa da contagem: um dado que soma fichas, ou a combinação, que
-// soma a base e aplica o multiplicador.
+// passo é uma etapa da contagem. Fichas e mult são ambos somados: a combinação
+// entra primeiro e define a base, e tudo depois acrescenta por cima.
 type passo struct {
 	rotulo string
 	fichas int
@@ -25,17 +25,29 @@ type animacao struct {
 	mult   int
 }
 
-// novaAnimacao monta a sequência: cada dado soma o próprio valor, e a
-// combinação entra por último com a base e o multiplicador. É a regra da soma
-// visível passo a passo, em vez de um número que muda de uma vez.
-func novaAnimacao(p regras.Pontuacao, dados regras.Mao) animacao {
-	var ps []passo
+// novaAnimacao monta a sequência na ordem do Balatro: a combinação primeiro,
+// fixando fichas e multiplicador; depois cada dado somando o próprio valor; e
+// por fim as runas que dispararam.
+//
+// A ordem importa além da estética: com o multiplicador definido logo no
+// começo, o total cresce de verdade a cada passo e pode cruzar a meta no meio
+// da contagem. Somando os dados antes, a conta ficava rasteira até o último
+// passo e a travessia só acontecia no fim.
+func novaAnimacao(p regras.Pontuacao, dados regras.Mao, runas []regras.Runa) animacao {
+	base, mult := p.Combinacao.Base()
+	ps := []passo{{rotulo: p.Combinacao.Nome(), fichas: base, mult: mult}}
+
 	for _, d := range dados {
 		ps = append(ps, passo{rotulo: fmt.Sprintf("dado %d", d), fichas: d})
 	}
-	base, mult := p.Combinacao.Base()
-	ps = append(ps, passo{rotulo: p.Combinacao.Nome(), fichas: base, mult: mult})
-	return animacao{passos: ps, mult: 1}
+	for _, r := range runas {
+		if !r.Dispara(dados) {
+			continue
+		}
+		f, m := r.Aplica(dados)
+		ps = append(ps, passo{rotulo: "runa " + r.Letra, fichas: f, mult: m})
+	}
+	return animacao{passos: ps}
 }
 
 func (a animacao) acabou() bool { return a.atual >= len(a.passos) }
@@ -46,15 +58,11 @@ func (a animacao) avanca() animacao {
 	}
 	p := a.passos[a.atual]
 	a.fichas += p.fichas
-	if p.mult > 0 {
-		a.mult *= p.mult
-	}
+	a.mult += p.mult
 	a.atual++
 	return a
 }
 
-// rotulo é o que mostrar na linha do desenho: o passo atual durante a
-// contagem, a combinação da mão quando parada.
 func (a animacao) rotulo(padrao string) string {
 	if a.atual > 0 && a.atual <= len(a.passos) {
 		return a.passos[a.atual-1].rotulo
@@ -62,62 +70,84 @@ func (a animacao) rotulo(padrao string) string {
 	return padrao
 }
 
-// painelEsquerdo é alvo, acumulado, contador e desenho.
-func (s Screen) painelEsquerdo() []string {
-	const w = 18
+// larguras dos painéis da linha de cima. O do meio estica para ocupar o que
+// sobrar da largura da tela.
+const (
+	larguraEsquerda = 20
+	larguraDireita  = 20
+	espacoPainel    = 2
+)
 
-	fichas, mult := 0, 1
+func (s Screen) painelEsquerdo() []string {
+	fichas, mult := 0, 0
 	rotulo := regras.Identifica(s.partida.Dados).Nome()
 	if s.phase == PhaseContando {
 		fichas, mult = s.anim.fichas, s.anim.mult
 		rotulo = s.anim.rotulo(rotulo)
 	}
 
+	const w = larguraEsquerda
 	return ui.Painel(w,
 		ui.Rotulado("ALVO", ui.Numero(s.partida.Alvo), w),
 		ui.Rotulado("VOCE", ui.Numero(s.parcial()), w),
 		ui.Separador,
-		fmt.Sprintf("%s  x  %s", ui.Numero(int64(fichas)), ui.Numero(int64(mult))),
+		ui.Centraliza(fmt.Sprintf("%s  x  %s", ui.Numero(int64(fichas)), ui.Numero(int64(mult))), w),
 		ui.Separador,
-		rotulo,
+		ui.Centraliza(rotulo, w),
 	)
 }
 
-// mesa desenha a tela da rodada: painéis em cima, dados embaixo.
+// painelRunas estica para preencher a largura disponível.
+func (s Screen) painelRunas(largura int) []string {
+	var caixas [][]string
+	for i := 0; i < regras.MaxRunas; i++ {
+		letra := " "
+		if i < len(s.partida.Runas) {
+			letra = s.partida.Runas[i].Letra
+		}
+		caixas = append(caixas, []string{".---.", "| " + letra + " |", "'---'"})
+	}
+
+	out := ui.Painel(largura,
+		ui.Rotulado("RUNAS", fmt.Sprintf("%d/%d", len(s.partida.Runas), regras.MaxRunas), largura),
+		ui.Separador,
+	)
+	out = out[:len(out)-1]
+	for _, l := range ui.LadoALado(2, caixas...) {
+		out = append(out, "|"+ui.Centraliza(l, largura)+"|")
+	}
+	return append(out, "'"+strings.Repeat("-", largura)+"'")
+}
+
+func (s Screen) painelDireito() []string {
+	const w = larguraDireita
+	return ui.Painel(w,
+		ui.Rotulado("NIVEL", fmt.Sprintf("%d", s.partida.Nivel), w),
+		ui.Separador,
+		ui.Rotulado("MAOS", fmt.Sprintf("%d/%d", s.partida.Maos, regras.MaosPorRodada), w),
+		ui.Rotulado("REROLLS", fmt.Sprintf("%d/%d", s.partida.Rerolls, regras.RerollsPorRodada), w),
+		ui.Separador,
+		ui.Rotulado("MOEDAS", ui.Numero(int64(s.partida.Moedas)), w),
+	)
+}
+
+// mesa desenha a rodada: os painéis ocupam a largura toda no alto, e os dados
+// ficam no meio do espaço que sobra — em vez de tudo espremido num bloco
+// centralizado, que deixava buracos esquisitos em tela grande.
 func (s Screen) mesa(largura, altura int) string {
 	esquerda := s.painelEsquerdo()
-	// O painel da meta queima enquanto a contagem passa do alvo.
+	// O painel da meta queima a partir do passo que cruza o alvo.
 	if s.chama != nil && s.phase == PhaseContando {
 		esquerda = fogo.Sobre(s.chama.Linhas(), esquerda)
 	}
 
-	const larguraRunas = 31
-	var caixas [][]string
-	for i := 0; i < 5; i++ {
-		caixas = append(caixas, []string{".---.", "|   |", "'---'"})
+	meio := largura - larguraEsquerda - larguraDireita - 4 - 2*espacoPainel
+	if meio < 20 {
+		meio = 20
 	}
-	centro := ui.Painel(larguraRunas,
-		ui.Rotulado("RUNAS", "0/5", larguraRunas),
-		ui.Separador,
-	)
-	centro = centro[:len(centro)-1]
-	for _, l := range ui.LadoALado(1, caixas...) {
-		centro = append(centro, "|"+ui.Centraliza(l, larguraRunas)+"|")
-	}
-	centro = append(centro, "'"+strings.Repeat("-", larguraRunas)+"'")
+	topo := ui.LadoALado(espacoPainel, esquerda, s.painelRunas(meio), s.painelDireito())
 
-	direita := ui.Painel(16,
-		ui.Rotulado("NIVEL", fmt.Sprintf("%d", s.partida.Nivel), 16),
-		ui.Separador,
-		ui.Rotulado("MAOS", fmt.Sprintf("%d/%d", s.partida.Maos, regras.MaosPorRodada), 16),
-		ui.Rotulado("REROLLS", fmt.Sprintf("%d/%d", s.partida.Rerolls, regras.RerollsPorRodada), 16),
-		ui.Separador,
-		ui.Rotulado("MOEDAS", ui.Numero(int64(s.partida.Moedas)), 16),
-	)
-
-	bloco := append([]string{}, ui.LadoALado(2, esquerda, centro, direita)...)
-	bloco = append(bloco, "")
-
+	// Mesa de dados, centralizada na largura.
 	var ds [][]string
 	for _, v := range s.partida.Dados {
 		ds = append(ds, ui.Dado(v))
@@ -136,11 +166,25 @@ func (s Screen) mesa(largura, altura int) string {
 			rotulos.WriteString("  ")
 		}
 	}
-	larguraMesa := ui.Largura(marcas.String())
-	for _, l := range ui.LadoALado(2, ds...) {
-		bloco = append(bloco, ui.Centraliza(l, larguraMesa))
-	}
-	bloco = append(bloco, marcas.String(), rotulos.String())
 
-	return strings.Join(ui.CentralizaBloco(bloco, largura, altura), "\n")
+	var mesa []string
+	for _, l := range ui.LadoALado(2, ds...) {
+		mesa = append(mesa, ui.Centraliza(l, largura))
+	}
+	mesa = append(mesa,
+		ui.Centraliza(marcas.String(), largura),
+		ui.Centraliza(rotulos.String(), largura),
+	)
+
+	// Painéis colados no alto, dados no meio do resto.
+	linhas := append([]string{}, topo...)
+	sobra := altura - len(topo) - len(mesa)
+	for i := 0; i < sobra/2; i++ {
+		linhas = append(linhas, "")
+	}
+	linhas = append(linhas, mesa...)
+	for len(linhas) < altura {
+		linhas = append(linhas, "")
+	}
+	return strings.Join(linhas[:altura], "\n")
 }

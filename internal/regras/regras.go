@@ -150,3 +150,16 @@ func Avalia(m Mao) Pontuacao {
 		Mult:       mult,
 	}
 }
+
+// AvaliaCom pontua uma mão levando as runas em conta. Fichas e multiplicador
+// das runas são somados ao da combinação, nunca multiplicados entre si: é o
+// que mantém a conta previsível quando várias disparam juntas.
+func AvaliaCom(m Mao, runas []Runa) Pontuacao {
+	p := Avalia(m)
+	for _, r := range runas {
+		f, mult := r.Aplica(m)
+		p.Fichas += f
+		p.Mult += mult
+	}
+	return p
+}

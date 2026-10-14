@@ -72,45 +72,63 @@ func (s Screen) modalDerrota(largura, altura int) string {
 	return strings.Join(ui.CentralizaBloco(bloco, largura, altura), "\n")
 }
 
-// loja segue o arranjo do Balatro: a coluna da esquerda com as ações, a
-// prateleira no meio e os pacotes embaixo. As áreas estão desenhadas e vazias
-// — o que entra dentro é a próxima conversa.
+// loja segue o arranjo do Balatro: ações à esquerda, prateleira no meio,
+// pacotes embaixo. As runas à venda já funcionam; os pacotes continuam vazios.
 func (s Screen) loja(largura, altura int) string {
-	acoes := ui.Painel(14,
-		ui.Centraliza("PROXIMO", 14),
-		ui.Centraliza("NIVEL", 14),
-	)
-	acoes = append(acoes, ui.Painel(14,
-		ui.Centraliza("REROLL", 14),
-		ui.Centraliza("---", 14),
-	)...)
-	acoes = append(acoes, ui.Painel(14,
-		ui.Rotulado("moedas", ui.Numero(int64(s.partida.Moedas)), 14),
+	const larguraAcoes = 18
+
+	acoes := ui.Painel(larguraAcoes, ui.Centraliza("PROXIMO NIVEL", larguraAcoes), ui.Centraliza("[enter]", larguraAcoes))
+	acoes = append(acoes, ui.Painel(larguraAcoes,
+		ui.Rotulado("moedas", ui.Numero(int64(s.partida.Moedas)), larguraAcoes),
+		ui.Rotulado("runas", fmt.Sprintf("%d/%d", len(s.partida.Runas), regras.MaxRunas), larguraAcoes),
 	)...)
 
-	// Prateleira: as runas à venda.
-	var vitrines [][]string
-	for i := 0; i < 3; i++ {
-		vitrines = append(vitrines, ui.Painel(12, "", "", "", ""))
+	larguraVitrine := largura - larguraAcoes - 8
+	if larguraVitrine < 40 {
+		larguraVitrine = 40
 	}
-	prateleira := ui.Painel(44, ui.Centraliza("A VENDA", 44), ui.Separador)
+
+	// Prateleira: as três runas sorteadas para este nível.
+	var vitrines [][]string
+	for i, r := range s.vitrine {
+		const w = 16
+		if r.Letra == "" {
+			vitrines = append(vitrines, ui.Painel(w, "", ui.Centraliza("vendida", w), "", ""))
+			continue
+		}
+		f, m := r.Aplica(regras.Mao{1, 2, 3, 4, 5})
+		_, _ = f, m
+		vitrines = append(vitrines, ui.Painel(w,
+			ui.Centraliza(fmt.Sprintf("[%d]  %s", i+1, r.Letra), w),
+			ui.Separador,
+			ui.Centraliza(fmt.Sprintf("%d moedas", PrecoRuna), w),
+		))
+	}
+	prateleira := ui.Painel(larguraVitrine, ui.Centraliza("A VENDA", larguraVitrine), ui.Separador)
 	prateleira = prateleira[:len(prateleira)-1]
 	for _, l := range ui.LadoALado(2, vitrines...) {
-		prateleira = append(prateleira, "|"+ui.Centraliza(l, 44)+"|")
+		prateleira = append(prateleira, "|"+ui.Centraliza(l, larguraVitrine)+"|")
 	}
-	prateleira = append(prateleira, "'"+strings.Repeat("-", 44)+"'")
+	// Uma linha por runa, dizendo o que ela faz: sem isso a letra não informa
+	// nada e a compra vira chute.
+	for _, r := range s.vitrine {
+		if r.Letra == "" {
+			continue
+		}
+		prateleira = append(prateleira, "|"+ui.Centraliza(r.Letra+" - "+r.Descricao(), larguraVitrine)+"|")
+	}
+	prateleira = append(prateleira, "'"+strings.Repeat("-", larguraVitrine)+"'")
 
-	// Pacotes, embaixo.
 	var caixas [][]string
 	for i := 0; i < 2; i++ {
 		caixas = append(caixas, ui.Painel(18, "", "", ""))
 	}
-	pacotes := ui.Painel(44, ui.Centraliza("PACOTES", 44), ui.Separador)
+	pacotes := ui.Painel(larguraVitrine, ui.Centraliza("PACOTES", larguraVitrine), ui.Separador)
 	pacotes = pacotes[:len(pacotes)-1]
 	for _, l := range ui.LadoALado(4, caixas...) {
-		pacotes = append(pacotes, "|"+ui.Centraliza(l, 44)+"|")
+		pacotes = append(pacotes, "|"+ui.Centraliza(l, larguraVitrine)+"|")
 	}
-	pacotes = append(pacotes, "'"+strings.Repeat("-", 44)+"'")
+	pacotes = append(pacotes, "'"+strings.Repeat("-", larguraVitrine)+"'")
 
 	direita := append([]string{}, prateleira...)
 	direita = append(direita, pacotes...)

@@ -118,29 +118,54 @@ func TestTeclasSaoIgnoradasDuranteAContagem(t *testing.T) {
 	}
 }
 
-func TestContagemSomaOsDadosEDepoisACombinacao(t *testing.T) {
+// A combinação entra PRIMEIRO, fixando fichas e multiplicador, e só depois os
+// dados somam. A ordem não é estética: com o multiplicador definido já no
+// primeiro passo, o total cresce de verdade a cada tique e pode cruzar a meta
+// no meio da contagem. Na ordem inversa a conta fica rasteira até o fim.
+func TestAContagemComecaPelaCombinacao(t *testing.T) {
 	s := New()
 	s.partida.Dados = regras.Mao{3, 3, 3, 6, 6} // full house, soma 21
 	s, _ = tecla(s, "enter")
 
-	// Cinco tiques somam os dados, um por um.
+	s, _ = aplica(s, tiquePontuacao{})
+	if got := s.anim.mult; got != 5 {
+		t.Errorf("mult depois do primeiro passo = %d, quero 5 (a combinação vem primeiro)", got)
+	}
+	if got := s.anim.fichas; got != 5 {
+		t.Errorf("fichas depois do primeiro passo = %d, quero 5", got)
+	}
+
+	// Os cinco dados somam por cima, um por tique.
 	for i := 0; i < regras.DadosPorMao; i++ {
 		s, _ = aplica(s, tiquePontuacao{})
 	}
-	if got := s.anim.fichas; got != 21 {
-		t.Errorf("fichas depois dos dados = %d, quero 21", got)
-	}
-	if got := s.anim.mult; got != 1 {
-		t.Errorf("mult antes da combinação = %d, quero 1", got)
-	}
-
-	// O último tique aplica a combinação.
-	s, _ = aplica(s, tiquePontuacao{})
 	if got := s.anim.fichas; got != 26 {
-		t.Errorf("fichas com a base do full house = %d, quero 26", got)
+		t.Errorf("fichas com os dados somados = %d, quero 26", got)
 	}
 	if got := s.anim.mult; got != 5 {
-		t.Errorf("mult = %d, quero 5", got)
+		t.Errorf("mult = %d, os dados não deviam mexer nele", got)
+	}
+}
+
+// As runas disparam depois dos dados, e só as que têm efeito viram passo.
+func TestAsRunasEntramDepoisDosDados(t *testing.T) {
+	c, _ := regras.RunaPorLetra("C") // cada dado 3: +10 fichas
+	l, _ := regras.RunaPorLetra("L") // tem um 6: +2 mult
+	a, _ := regras.RunaPorLetra("A") // cada dado 1: não dispara aqui
+
+	s := New()
+	s.partida.Dados = regras.Mao{3, 3, 3, 6, 6}
+	s.partida.Runas = []regras.Runa{c, l, a}
+	s, _ = tecla(s, "enter")
+
+	// A runa inerte não vira passo: combinação + 5 dados + 2 runas.
+	if got := len(s.anim.passos); got != 8 {
+		t.Errorf("a contagem tem %d passos, quero 8 (a runa sem efeito não entra)", got)
+	}
+
+	s = contaTudo(s)
+	if quero := (5 + 21 + 30) * (5 + 2); s.Partida().Pontos != int64(quero) {
+		t.Errorf("pontos = %d, quero %d", s.Partida().Pontos, quero)
 	}
 }
 
