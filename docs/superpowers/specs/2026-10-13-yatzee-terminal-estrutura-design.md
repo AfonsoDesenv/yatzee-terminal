@@ -69,8 +69,11 @@ cmd/yatzee ──> internal/app ──> internal/ui ──> internal/game    (re
                      └────────────────> internal/player          (identidade)
 ```
 
-- **`internal/game`** — regras em Go puro. Zero I/O, zero Bubble Tea. Aqui só
-  existem os tipos mínimos de costura nesta entrega.
+- **`internal/game`** — regras em Go puro. Zero I/O, zero Bubble Tea. **Não existe
+  nesta entrega**: nasce com as mecânicas, porque não havia tipo nenhum de
+  costura a escrever antes delas. A revisão final confirmou que criar um pacote
+  vazio só para satisfazer o diagrama não vale a pena. Hoje o pacote chamado
+  `game` é `internal/ui/game`, a tela da partida.
 - **`internal/ui`** — telas, componentes e tema.
 - **`internal/score`** — `score.Entry`, `score.Store` e implementação em JSON.
 - **`internal/player`** — `player.Identity`, `player.Player`, `player.Store` e
@@ -393,7 +396,7 @@ yatzee_terminal/
 │   │       ├── game.go         # container das fases
 │   │       ├── round.go        # placeholder
 │   │       └── shop.go         # placeholder
-│   ├── game/game.go            # tipos de costura (regras vêm depois)
+│   (internal/game nasce com as mecânicas, não nesta entrega)
 │   ├── player/
 │   │   ├── player.go           # Identity, Player, Store
 │   │   ├── jsonfile.go
