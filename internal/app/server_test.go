@@ -55,13 +55,17 @@ func TestGuestIdentityNaoPersisteENaoRepete(t *testing.T) {
 	}
 }
 
-func TestConvidadosDeSessoesDiferentesNaoColidem(t *testing.T) {
+func TestCadaSessaoTemSeuGerador(t *testing.T) {
 	a := sessaoDeTeste(t)
 	b := sessaoDeTeste(t)
 
-	// O que importa não é o gerador avançar, e sim cada sessão ter o seu
-	// próprio: com um gerador global compartilhado, duas sessões poderiam
-	// produzir o mesmo id de convidado.
+	// O que importa não é o gerador avançar, e sim cada sessão ter o SEU.
+	// Comparar apenas os ids seria insuficiente: dois sorteios sequenciais de
+	// um gerador global também diferem, então um teste só de ids passaria
+	// justamente sob o defeito que ele existe para pegar.
+	if a.Rand == b.Rand {
+		t.Fatal("as duas sessões compartilham o mesmo gerador")
+	}
 	if GuestIdentity(a.Rand).ID == GuestIdentity(b.Rand).ID {
 		t.Error("duas sessões geraram o mesmo id de convidado")
 	}
