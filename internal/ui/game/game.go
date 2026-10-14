@@ -49,20 +49,48 @@ func New() Screen {
 // Phase é a fase atual.
 func (s Screen) Phase() Phase { return s.phase }
 
+// Animando diz se a jogada está sendo contada ou comemorada.
+func (s Screen) Animando() bool { return s.round.animando() }
+
 // Title identifica a tela.
 func (s Screen) Title() string { return "jogo" }
 
 // Init não precisa de nada ainda.
 func (s Screen) Init() tea.Cmd { return nil }
 
-// Update alterna as fases, marca dados e trata a volta.
+// Update roteia teclas e os tiques da animação.
 func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		s.largura, s.altura = msg.Width, msg.Height
 		return s, nil
 
+	case tiquePontuacao:
+		var cmd tea.Cmd
+		s.round, cmd = s.round.avanca()
+		return s, cmd
+
+	case espalhaFogo:
+		var cmd tea.Cmd
+		s.round, cmd = s.round.espalha(s.largura, s.altura-1)
+		return s, cmd
+
+	case tiqueFogo:
+		var cmd tea.Cmd
+		s.round, cmd = s.round.queima()
+		return s, cmd
+
+	case apagaFogo:
+		s.round = s.round.apaga()
+		return s, nil
+
 	case tea.KeyPressMsg:
+		// Durante a contagem o teclado não responde: mexer no estado no meio
+		// da sequência que ela percorre deixaria a tela inconsistente.
+		if s.phase == PhaseRound && s.round.animando() {
+			return s, nil
+		}
+
 		pressed := msg.String()
 		switch {
 		case s.keys.Matches(pressed, s.keys.Toggle):
@@ -73,6 +101,10 @@ func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 			}
 		case s.keys.Matches(pressed, s.keys.Back):
 			return s, ui.Back
+		case s.phase == PhaseRound && s.keys.Matches(pressed, s.keys.Confirm):
+			var cmd tea.Cmd
+			s.round, cmd = s.round.envia()
+			return s, cmd
 		default:
 			// Dígito marca o dado para rerolar: a seleção é por número, não
 			// por cursor, então dá para escolher 1, 3 e 5 em três toques.
@@ -95,6 +127,5 @@ func (s Screen) View() string {
 		corpo = s.shop.render(s.largura, s.altura-1)
 		dicas = s.shop.ajuda()
 	}
-	ajuda := ui.Centraliza(s.keys.Help(dicas), s.largura)
-	return strings.Join([]string{corpo, ajuda}, "\n")
+	return strings.Join([]string{corpo, ui.Centraliza(s.keys.Help(dicas), s.largura)}, "\n")
 }
