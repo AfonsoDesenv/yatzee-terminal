@@ -188,28 +188,30 @@ type Store interface {
 expressa quase tudo, aplicada depois de remover os espaços das pontas:
 
 ```go
-var nameRE = regexp.MustCompile(`^[A-Za-z0-9_-]+( [A-Za-z0-9_-]+)?$`)
+var nameRE = regexp.MustCompile(`^[a-z0-9_-]+( [a-z0-9_-]+)?$`)
 ```
 
 | Regra | Valor | Motivo |
 |---|---|---|
-| Caracteres | Apenas `A-Z`, `a-z`, `0-9`, `-`, `_` | Whitelist, não blacklist: o que não está na lista não entra |
+| Caracteres | Apenas `a-z`, `0-9`, `-`, `_` | Whitelist, não blacklist: o que não está na lista não entra |
+| Maiúscula | Rejeitada, não convertida | Nome é definitivo: converter calado faria a pessoa que digitou "Afonso" descobrir no placar que virou "afonso" |
 | Espaço | No máximo um, e nunca nas pontas nem dobrado | O grupo opcional da regex expressa exatamente isso |
 | Comprimento | 3 a 16 caracteres | O placar precisa alinhar |
 | Conteúdo mínimo | Pelo menos uma letra ou dígito | Rejeita `___` e `---` |
-| Unicidade | Case-insensitive | Impede que "Afonso" e "afonso" coexistam e se passem um pelo outro; a grafia original é preservada na exibição |
+| Unicidade | Comparação direta | Sem maiúscula e sem acento, o nome válido já é a própria chave: nada a normalizar |
 
-Duas consequências do ASCII puro que valem ser ditas em voz alta: **"João" e
-"Ação" são rejeitados** — se quiser liberar acento depois, é trocar a classe da
-regex por letras Unicode, e aí o comprimento volta a precisar de
-`lipgloss.Width` em vez de `len`. E o whitelist torna a regra anti-ANSI
-redundante: sequência de escape não sobrevive a `[A-Za-z0-9_-]`. De quebra,
+O que o whitelist entrega de graça, sem nenhuma regra extra: sequência de escape
+ANSI não sobrevive a `[a-z0-9_-]`, então a regra anti-ANSI fica redundante; e
 barrar não-ASCII fecha a porta pra impersonação por homóglifo, o truque de
-registrar "аfonso" com um "а" cirílico que desenha igual ao latino.
+registrar "аfonso" com um "а" cirílico que desenha igual ao latino. Como letras
+maiúsculas e acento estão fora, "João", "Ação" e "Afonso" são todos rejeitados —
+liberar acento depois é trocar a classe da regex, e aí o comprimento volta a
+precisar de `lipgloss.Width` em vez de `len`.
 
-A chave de unicidade é o nome normalizado (minúsculo, sem espaços nas pontas);
-`Player.Name` guarda o que a pessoa digitou. Erro de nome em uso não é falha do
-sistema: a tela mantém o texto digitado, mostra a mensagem e espera outro nome.
+Erro de nome, seja de formato ou de nome em uso, não é falha do sistema: a tela
+mantém o texto digitado, mostra a mensagem e espera outro nome. Ela também
+exibe a regra abaixo do campo, para a pessoa não descobrir o formato por
+tentativa e erro.
 
 **Consequência aceita nesta versão:** nome tomado é nome perdido para sempre, e
 quem errou a digitação na primeira conexão fica com o erro. Trocar nome entra
@@ -320,11 +322,11 @@ serviço iniciado pelo systemd ou por container tem CWD imprevisível.
 - **Identidade**: tela inicial é Name quando o ID é desconhecido e Menu quando
   conhecido; convidado não é persistido; `Replace` não deixa volta pra tela de
   nome.
-- **Nome**: tabela de casos contra a regex — aceita `afo_nso-1` e `Afonso Dev`,
-  rejeita `ab`, nome de 17, `a  b` (dois espaços), `a b c` (dois espaços
-  separados), ` ab `, `João`, `___`, e nome com ANSI embutido. `Claim` do mesmo
-  nome em grafia diferente devolve `ErrNameTaken`; a tela preserva o texto
-  digitado ao mostrar o erro.
+- **Nome**: tabela de casos contra a regex — aceita `afo_nso-1` e `afonso dev`,
+  rejeita `Afonso` (maiúscula), `ab` (curto), nome de 17, `a  b` (dois espaços),
+  `a b c` (dois espaços separados), ` ab ` (pontas), `joão` (acento), `___` (sem
+  alfanumérico) e nome com ANSI embutido. `Claim` de nome já gravado devolve
+  `ErrNameTaken`; a tela preserva o texto digitado ao mostrar o erro.
 - **Persistência**: round-trip de salvar e ler, ordenação do `Top`, e escrita
   concorrente de duas sessões sem corromper o arquivo.
 
