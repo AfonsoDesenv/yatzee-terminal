@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -42,6 +43,11 @@ func PlayLocal(ctx context.Context) error {
 	// apenas aos stores, e um SIGTERM não encerraria a partida local.
 	prog := tea.NewProgram(NewRoot(sess, FirstScreen(sess)), tea.WithContext(ctx))
 	if _, err := prog.Run(); err != nil {
+		// Parar por SIGTERM/ctrl+c é saída deliberada, não falha: o supervisor
+		// lê exit 1 como crash.
+		if errors.Is(err, tea.ErrProgramKilled) {
+			return nil
+		}
 		return fmt.Errorf("rodar o jogo: %w", err)
 	}
 	return nil
