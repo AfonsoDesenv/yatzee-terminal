@@ -256,7 +256,7 @@ func envOr(key, fallback string) string {
 
 - [ ] **Step 5: Rodar o teste e confirmar que passa**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/app/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/app/ -v -count=1`
 Expected: PASS nos três testes
 
 - [ ] **Step 6: Criar o Makefile**
@@ -361,6 +361,7 @@ func TestCleanNameRejeita(t *testing.T) {
 		{"---", "sem alfanumérico"},
 		{"", "vazio"},
 		{"   ", "só espaço"},
+		{" ab ", "curto depois do trim"},
 		{"af\x1b[31monso", "ANSI embutido"},
 		{"afonso\n", "controle"},
 	}
@@ -382,7 +383,7 @@ func TestNameRuleMencionaOsLimites(t *testing.T) {
 
 func TestIdentityPersistent(t *testing.T) {
 	casos := []struct {
-		kind Kind
+		kind  Kind
 		quero bool
 	}{
 		{KindPubKey, true},
@@ -399,7 +400,7 @@ func TestIdentityPersistent(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v -count=1`
 Expected: FAIL com `undefined: CleanName`
 
 - [ ] **Step 3: Implementar identidade e nome**
@@ -418,6 +419,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Limites do nome. O teto existe porque o placar precisa alinhar.
@@ -440,6 +442,12 @@ var nameRE = regexp.MustCompile(`^[a-z0-9_-]+( [a-z0-9_-]+)?$`)
 // CleanName devolve o nome canônico ou ErrNameInvalid. É o único caminho para
 // um nome entrar no sistema, então nenhum chamador precisa lembrar de validar.
 func CleanName(s string) (string, error) {
+	// Caractere de controle é recusado ANTES do trim. Ao contrário: o
+	// TrimSpace removeria o "\n" de "afonso\n" e um nome com controle
+	// embutido passaria a válido.
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return "", fmt.Errorf("%w: caractere de controle", ErrNameInvalid)
+	}
 	s = strings.TrimSpace(s)
 	if len(s) < NameMinLen || len(s) > NameMaxLen {
 		return "", fmt.Errorf("%w: precisa de %d a %d caracteres", ErrNameInvalid, NameMinLen, NameMaxLen)
@@ -507,7 +515,7 @@ type Store interface {
 
 - [ ] **Step 4: Rodar o teste e confirmar que passa**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v -count=1`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -868,7 +876,7 @@ func (s *JSONStore) save(data playersFile) error {
 
 - [ ] **Step 4: Rodar os testes com detector de corrida**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v -count=1`
 Expected: PASS em tudo, sem aviso de corrida
 
 - [ ] **Step 5: Commit**
@@ -1021,7 +1029,7 @@ func TestSaveConcorrenteNaoPerdeEntrada(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/score/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/score/ -v -count=1`
 Expected: FAIL com `undefined: NewJSONStore`
 
 - [ ] **Step 3: Implementar o tipo e a interface**
@@ -1174,7 +1182,7 @@ func (s *JSONStore) save(data scoresFile) error {
 
 - [ ] **Step 5: Rodar os testes com detector de corrida**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/score/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/score/ -v -count=1`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -1253,7 +1261,7 @@ func TestHelpJuntaAsDicas(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/ -v -count=1`
 Expected: FAIL com `undefined: Size`
 
 - [ ] **Step 3: Implementar o contrato de tela**
@@ -1423,7 +1431,7 @@ func Size(w, h int) (int, int) {
 
 - [ ] **Step 5: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/ -v -count=1`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -1903,7 +1911,7 @@ func (s Screen) Title() string                       { return "jogo" }
 
 - [ ] **Step 6: Rodar os testes de navegação**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/app/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/app/ -v -count=1`
 Expected: PASS nos sete testes de navegação
 
 - [ ] **Step 7: Commit**
@@ -2085,7 +2093,7 @@ func TestViewMostraARegra(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/name/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/name/ -v -count=1`
 Expected: FAIL com `undefined: New`
 
 - [ ] **Step 3: Implementar a tela de nome**
@@ -2227,7 +2235,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/name/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/name/ -v -count=1`
 Expected: PASS nos sete testes
 
 - [ ] **Step 5: Commit**
@@ -2369,7 +2377,7 @@ func TestViewMostraONomeEOsItens(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/menu/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/menu/ -v -count=1`
 Expected: FAIL — o esqueleto não tem `Cursor()`
 
 - [ ] **Step 3: Implementar o menu**
@@ -2477,7 +2485,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/menu/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/menu/ -v -count=1`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -2600,7 +2608,7 @@ func TestEscVolta(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/scores/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/scores/ -v -count=1`
 Expected: FAIL com `undefined: LoadedMsg`
 
 - [ ] **Step 3: Implementar a tela de placar**
@@ -2706,7 +2714,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/scores/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/scores/ -v -count=1`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -2795,7 +2803,7 @@ func TestEscVoltaProMenu(t *testing.T) {
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/game/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/game/ -v -count=1`
 Expected: FAIL com `undefined: PhaseRound`
 
 - [ ] **Step 3: Implementar as duas fases**
