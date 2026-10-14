@@ -32,14 +32,43 @@ func TestTabAlternaAsFases(t *testing.T) {
 }
 
 func TestViewSegueAFase(t *testing.T) {
+	// Afirma texto exclusivo de cada fase, e a ausência do texto da outra. A
+	// barra de help diz "tab alterna rodada e loja", então procurar só por
+	// "rodada" ou "loja" passaria em qualquer fase — inclusive se o View
+	// ignorasse a fase e sempre desenhasse a rodada, que é justamente o
+	// comportamento que este teste existe para garantir.
+	const textoRodada = "as mecânicas de dados entram aqui"
+	const textoLoja = "os itens entram aqui"
+
 	s := New()
-	if !strings.Contains(s.View(), "rodada") {
-		t.Errorf("view da rodada não menciona rodada:\n%s", s.View())
+	v := s.View()
+	if !strings.Contains(v, textoRodada) {
+		t.Errorf("view da rodada não mostra o conteúdo da rodada:\n%s", v)
+	}
+	if strings.Contains(v, textoLoja) {
+		t.Errorf("view da rodada mostra conteúdo da loja:\n%s", v)
 	}
 
 	next, _ := s.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if !strings.Contains(next.View(), "loja") {
-		t.Errorf("view da loja não menciona loja:\n%s", next.View())
+	v = next.View()
+	if !strings.Contains(v, textoLoja) {
+		t.Errorf("view da loja não mostra o conteúdo da loja:\n%s", v)
+	}
+	if strings.Contains(v, textoRodada) {
+		t.Errorf("view da loja mostra conteúdo da rodada:\n%s", v)
+	}
+}
+
+// Mensagem que não é tecla não pode mexer na fase: a raiz manda WindowSizeMsg
+// para a tela do topo a cada resize.
+func TestMensagemNaoTeclaNaoMudaAFase(t *testing.T) {
+	s := New()
+	next, cmd := s.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	if got := next.(Screen).Phase(); got != PhaseRound {
+		t.Errorf("fase = %v, quero PhaseRound", got)
+	}
+	if cmd != nil {
+		t.Errorf("mensagem não-tecla devolveu comando %v", cmd())
 	}
 }
 
