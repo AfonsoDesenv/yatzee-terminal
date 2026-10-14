@@ -36,6 +36,14 @@ func LoadConfig() (Config, error) {
 	hostKey := os.Getenv("YATZEE_SSH_HOST_KEY")
 	if hostKey == "" {
 		hostKey = filepath.Join(dataDir, "ssh_host_ed25519")
+	} else {
+		// Override do operador também precisa ser absoluto, pelo mesmo motivo
+		// do DataDir: um serviço não escolhe o próprio CWD.
+		abs, absErr := filepath.Abs(hostKey)
+		if absErr != nil {
+			return Config{}, fmt.Errorf("resolver caminho absoluto de %q: %w", hostKey, absErr)
+		}
+		hostKey = abs
 	}
 
 	return Config{

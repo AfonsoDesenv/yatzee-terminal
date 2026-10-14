@@ -68,3 +68,21 @@ func TestLoadConfigTornaDataDirAbsoluto(t *testing.T) {
 		t.Errorf("DataDir = %q, quero absoluto", cfg.DataDir)
 	}
 }
+
+// A mesma garantia vale para o override da chave do host: é justamente o
+// cenário que a regra existe para evitar (unit do systemd com caminho relativo).
+func TestLoadConfigTornaHostKeyAbsoluta(t *testing.T) {
+	t.Setenv("YATZEE_DATA_DIR", t.TempDir())
+	t.Setenv("YATZEE_SSH_HOST_KEY", "chave-relativa")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !filepath.IsAbs(cfg.SSHHostKey) {
+		t.Errorf("SSHHostKey = %q, quero absoluto", cfg.SSHHostKey)
+	}
+	if filepath.Base(cfg.SSHHostKey) != "chave-relativa" {
+		t.Errorf("SSHHostKey = %q, quero preservar o nome do arquivo", cfg.SSHHostKey)
+	}
+}
