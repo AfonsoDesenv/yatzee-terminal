@@ -6,8 +6,8 @@
 ## Objetivo
 
 Jogo de dados estilo Yahtzee com progressão e loja inspiradas em Balatro, jogável
-no terminal. Esta entrega monta **apenas a estrutura de telas e navegação**. As
-mecânicas do jogo são a próxima conversa e não entram aqui.
+no terminal. Esta entrega monta **a estrutura de telas, navegação e identidade**.
+As mecânicas do jogo são a próxima conversa e não entram aqui.
 
 O jogo precisa ser jogável remotamente no futuro (servidor próprio atrás de
 Cloudflare), sem que o jogador instale nada. Esse requisito molda a arquitetura
@@ -17,6 +17,8 @@ desde agora.
 
 **Nesta entrega:**
 
+- Identidade do jogador por chave pública SSH: primeira conexão pergunta o nome,
+  as seguintes reconhecem a pessoa
 - Tela de menu (New Game / Scores / Quit)
 - Tela de scores lendo os melhores jogadores do armazenamento local. Sem
   gameplay ainda não existem partidas, então ela renderiza um estado vazio
@@ -25,15 +27,14 @@ desde agora.
 - Tela de jogo com duas fases placeholder (rodadas e loja), alternáveis
 - Navegação completa entre todas as telas, com volta ao menu
 - Modo servidor SSH funcional (`yatzee serve`)
-- Testes de navegação
+- Testes de navegação, de identidade e de persistência
 
 **Fora desta entrega:**
 
 - Regras do jogo (dados, pontuação, rodadas), economia e itens da loja
-- Pergunta de nome do jogador no `New Game` — a tela de jogo abre direto, porque
-  a identidade só é decidida quando houver score para gravar
-- Autenticação, contas e scores globais compartilhados
+- Scores globais compartilhados e banco de dados
 - Web terminal (ttyd), Dockerfile e configuração do Cloudflare Tunnel
+- Rate limit e log de abuso
 
 ## Stack
 
@@ -42,8 +43,8 @@ desde agora.
 | Linguagem | Go 1.26 (`apt install golang-go`) | ~10 MB por sessão contra ~60 MB do Python; binário único sem runtime se um dia distribuir local |
 | TUI | Bubble Tea | Arquitetura Elm (model/update/view), testável sem terminal |
 | Estilo | Lip Gloss | Renderer por sessão, essencial no modo multi-cliente |
-| Componentes | Bubbles (`list`, `key`, `help`) | Evita reescrever lista e keybindings |
-| Servidor | Wish | Serve um app Bubble Tea como servidor SSH nativo |
+| Componentes | Bubbles (`list`, `textinput`, `key`, `help`) | Evita reescrever lista, input e keybindings |
+| Servidor | Wish | Serve um app Bubble Tea como servidor SSH nativo, com a chave do cliente em mãos |
 
 O jogador não instala nada em nenhuma das opções de linguagem, porque o runtime
 roda no servidor. O critério de decisão foi custo por sessão no servidor.
@@ -54,15 +55,18 @@ A única regra: **a dependência aponta pra dentro**. A UI conhece as regras; as
 regras nunca conhecem a UI.
 
 ```
-cmd/yatzee ──> internal/app ──> internal/ui ──> internal/game   (regras puras)
+cmd/yatzee ──> internal/app ──> internal/ui ──> internal/game    (regras puras)
                      │
-                     └────────────────> internal/store          (persistência)
+                     ├────────────────> internal/score           (persistência)
+                     └────────────────> internal/player          (identidade)
 ```
 
 - **`internal/game`** — regras em Go puro. Zero I/O, zero Bubble Tea. Aqui só
   existem os tipos mínimos de costura nesta entrega.
 - **`internal/ui`** — telas, componentes e tema.
-- **`internal/store`** — interface `ScoreStore` e implementação em arquivo JSON.
+- **`internal/score`** — `score.Entry`, `score.Store` e implementação em JSON.
+- **`internal/player`** — `player.Identity`, `player.Player`, `player.Store` e
+  implementação em JSON. Não importa nada do projeto, então não há ciclo.
 - **`internal/app`** — a sessão e o router.
 - **`cmd/yatzee`** — `yatzee` joga local, `yatzee serve` sobe o servidor SSH.
 
@@ -82,22 +86,28 @@ type Screen interface {
 }
 
 // Navegação por mensagem, nunca por chamada direta entre telas.
-type PushMsg struct{ Screen Screen }
-type PopMsg  struct{}
-type QuitMsg struct{}
+type PushMsg    struct{ Screen Screen }  // empilha
+type PopMsg     struct{}                 // volta uma
+type ReplaceMsg struct{ Screen Screen }  // troca o topo, sem deixar volta
+type QuitMsg    struct{}
 ```
 
 `Update` devolve `Screen` em vez de `tea.Model` para eliminar type assertion em
-cada tela.
+cada tela. `ReplaceMsg` existe para a tela de nome: depois de se apresentar,
+ninguém deve poder voltar pra ela com `esc`.
 
 ### Telas
 
 ```
-Menu ──> Scores ──> (esc volta)
-  └────> Game ──┬── RoundView  (rodadas)   [tab alterna]
-                └── ShopView   (lojinha)
-                    └─ esc volta pro Menu
+[primeira vez] Name ──(replace)──> Menu
+                                    ├──> Scores ──> (esc volta)
+                                    └──> Game ──┬── RoundView  (rodadas)
+                                                └── ShopView   (lojinha)
+                                                    [tab alterna, esc volta]
 ```
+
+A tela de nome é a base da pilha apenas quando a identidade é desconhecida; nas
+sessões seguintes o Menu já abre direto.
 
 Round e Shop **não** são telas independentes na pilha: são fases de uma partida.
 A tela Game é dona das duas e escolhe qual exibir pela fase atual, mantendo o
@@ -111,14 +121,79 @@ Definidas em `internal/ui/keys.go` e exibidas numa barra de help em cada tela.
 | Tecla | Efeito | Onde |
 |---|---|---|
 | `↑`/`↓`, `k`/`j` | Move a seleção | Menu, Scores |
-| `enter` | Confirma a seleção | Menu |
-| `esc` | Volta uma tela (pop da pilha) | Todas menos o Menu |
+| `enter` | Confirma a seleção / o nome | Menu, Name |
+| `esc` | Volta uma tela (pop da pilha) | Todas menos Menu e Name |
 | `tab` | Alterna rodadas e loja | Tela de jogo |
 | `q` | Sai do jogo | Menu |
 | `ctrl+c` | Sai de qualquer lugar | Global |
 
 `esc` no Menu não faz nada: é a base da pilha. Sair exige `q` ou `ctrl+c`, para
 que ninguém encerre a partida por reflexo de voltar.
+
+## Identidade
+
+O jogador é identificado pelo **fingerprint SHA256 da sua chave pública SSH**,
+não pelo IP. O IP identifica conexão, não pessoa: operadoras compartilham um
+IPv4 entre milhares de clientes via CGNAT, o lease residencial muda sozinho em
+dias, e trocar wifi por 4G muda o IP no meio da sessão. Pior, o IP real **não
+sobrevive ao Cloudflare Tunnel** — o `cloudflared` termina a conexão e o jogo vê
+`127.0.0.1` para todos. O fingerprint da chave é estável por anos, único por
+pessoa mesmo atrás de um NAT compartilhado, e é parte do protocolo SSH, então
+atravessa o Tunnel intacto.
+
+```go
+// internal/player/player.go
+type Kind string
+
+const (
+    KindPubKey Kind = "pubkey" // chave SSH: estável entre sessões
+    KindLocal  Kind = "local"  // jogo local, usuário do SO
+    KindGuest  Kind = "guest"  // SSH sem chave: nome por sessão, não persiste
+)
+
+type Identity struct {
+    ID   string // "key:SHA256:aBc..." | "local:afons" | "guest:<aleatório>"
+    Kind Kind
+    Name string // vazio na primeira vez
+}
+
+// Persistent informa se vale gravar esta identidade.
+func (i Identity) Persistent() bool { return i.Kind != KindGuest }
+
+type Player struct {
+    ID        string    `json:"id"`
+    Name      string    `json:"name"`
+    FirstSeen time.Time `json:"first_seen"`
+    LastSeen  time.Time `json:"last_seen"`
+}
+
+type Store interface {
+    Get(ctx context.Context, id string) (Player, bool, error)
+    Save(ctx context.Context, p Player) error
+}
+```
+
+Como cada modo monta a identidade:
+
+| Modo | ID | Nome |
+|---|---|---|
+| SSH com chave | `key:` + `gossh.FingerprintSHA256(key)` | Perguntado na primeira vez, persistido |
+| SSH sem chave | `guest:` + aleatório por sessão | Perguntado a cada sessão, não persistido |
+| Local (`yatzee`) | `local:` + usuário do SO | Perguntado na primeira vez, persistido |
+
+No servidor isso exige aceitar qualquer chave como válida — a chave é identidade,
+não autorização — e também permitir quem não tem chave:
+
+```go
+wish.WithPublicKeyAuth(func(ssh.Context, ssh.PublicKey) bool { return true })
+wish.WithKeyboardInteractiveAuth(func(ssh.Context, gossh.KeyboardInteractiveChallenge) bool { return true })
+```
+
+Sem o segundo, cliente sem chave sequer conecta.
+
+**IP:** não é gravado nesta entrega. Quando entrar, vai para log de operação
+(rate limit, abuso) e nunca como identidade — hasheado ou truncado, porque IP
+associado a nome é dado pessoal sob a LGPD num servidor público.
 
 ### Sessão
 
@@ -128,7 +203,9 @@ Uma sessão representa um jogador conectado. Local e SSH constroem a mesma coisa
 // internal/app/session.go
 type Session struct {
     Config   Config
-    Store    store.ScoreStore
+    Identity player.Identity
+    Players  player.Store
+    Scores   score.Store
     Rand     *rand.Rand         // por sessão, nunca o rand global
     Renderer *lipgloss.Renderer // perfil de cor do cliente
     Width    int
@@ -136,25 +213,26 @@ type Session struct {
 }
 ```
 
-### Armazenamento
+### Armazenamento de scores
 
 ```go
-// internal/store/store.go
+// internal/score/score.go
 type Entry struct {
-    Player string    `json:"player"`
-    Score  int       `json:"score"`
-    At     time.Time `json:"at"`
+    PlayerID string    `json:"player_id"`
+    Name     string    `json:"name"`
+    Points   int       `json:"points"`
+    At       time.Time `json:"at"`
 }
 
-type ScoreStore interface {
+type Store interface {
     Top(ctx context.Context, n int) ([]Entry, error)
     Save(ctx context.Context, e Entry) error
 }
 ```
 
-Implementação inicial em arquivo JSON, com escrita atômica (arquivo temporário
-mais rename) e mutex, porque várias sessões podem gravar ao mesmo tempo. O
-`context.Context` já está na assinatura para que a troca por Postgres ou HTTP
+Implementações em arquivo JSON, com escrita atômica (arquivo temporário mais
+rename) e mutex, porque várias sessões podem gravar ao mesmo tempo. O
+`context.Context` já está nas assinaturas para que a troca por Postgres ou HTTP
 não altere os chamadores.
 
 ## Restrições impostas pelo acesso remoto
@@ -166,6 +244,7 @@ Baratas agora, caras depois. Todas valem já nesta entrega.
 | RNG por sessão, injetado | `math/rand` global é compartilhado entre goroutines | Jogadores simultâneos interferem na sorte um do outro; nenhuma partida é reproduzível |
 | Zero estado mutável de pacote | N sessões no mesmo processo | Um jogador vê ou corrompe a partida do outro |
 | Tamanho e cor vindos da sessão, não de `os.Stdout` | Cada cliente SSH tem o próprio PTY | Layout quebrado para todos menos o primeiro cliente |
+| Identidade pela chave, não pelo IP | O Tunnel apaga o IP; CGNAT o compartilha | Jogadores se confundem entre si e perdem o nome ao trocar de rede |
 | Config por env var | Container atrás do Tunnel | Rebuild de imagem para mudar uma porta |
 
 Nota sobre Cloudflare, para a etapa futura: o proxy gratuito só encaminha
@@ -180,7 +259,7 @@ dois sem reescrita, porque o jogo não fala com o terminal diretamente.
 |---|---|---|
 | `YATZEE_SSH_HOST` | `0.0.0.0` | Interface do servidor SSH |
 | `YATZEE_SSH_PORT` | `2222` | Porta do servidor SSH |
-| `YATZEE_DATA_DIR` | `~/.local/share/yatzee` | Onde ficam o arquivo de scores e a chave do host |
+| `YATZEE_DATA_DIR` | `~/.local/share/yatzee` | Scores, jogadores e chave do host |
 | `YATZEE_SSH_HOST_KEY` | `$YATZEE_DATA_DIR/ssh_host_ed25519` | Chave do host, gerada no primeiro boot se ausente |
 
 Caminho absoluto em todos os casos, nunca relativo ao diretório de trabalho: um
@@ -191,8 +270,12 @@ serviço iniciado pelo systemd ou por container tem CWD imprevisível.
 - **`internal/game`**: teste unitário direto, por ser puro. TDD passa a valer
   quando as mecânicas entrarem.
 - **Router**: testável sem terminal — injetar `tea.KeyMsg` no model raiz e
-  afirmar qual tela está no topo da pilha. É a lógica que existe nesta entrega.
-- **`internal/store`**: round-trip de salvar e ler, e ordenação do `Top`.
+  afirmar qual tela está no topo da pilha.
+- **Identidade**: tela inicial é Name quando o ID é desconhecido e Menu quando
+  conhecido; convidado não é persistido; `Replace` não deixa volta pra tela de
+  nome.
+- **Persistência**: round-trip de salvar e ler, ordenação do `Top`, e escrita
+  concorrente de duas sessões sem corromper o arquivo.
 
 ## Estrutura de arquivos
 
@@ -205,12 +288,15 @@ yatzee_terminal/
 │   ├── app/
 │   │   ├── config.go           # Config via env
 │   │   ├── session.go          # Session
+│   │   ├── local.go            # monta sessão local
+│   │   ├── server.go           # servidor Wish, sessão por cliente
 │   │   ├── root.go             # model raiz: pilha de telas
-│   │   └── root_test.go        # testes de navegação
+│   │   └── root_test.go        # navegação e identidade
 │   ├── ui/
 │   │   ├── screen.go           # interface Screen + mensagens de navegação
 │   │   ├── theme.go            # estilos Lip Gloss num lugar só
 │   │   ├── keys.go             # keybindings + help
+│   │   ├── name/name.go        # pergunta o nome na primeira vez
 │   │   ├── menu/menu.go
 │   │   ├── scores/scores.go
 │   │   └── game/
@@ -218,9 +304,13 @@ yatzee_terminal/
 │   │       ├── round.go        # placeholder
 │   │       └── shop.go         # placeholder
 │   ├── game/game.go            # tipos de costura (regras vêm depois)
-│   └── store/
-│       ├── store.go            # ScoreStore + Entry
-│       ├── jsonfile.go         # implementação local
+│   ├── player/
+│   │   ├── player.go           # Identity, Player, Store
+│   │   ├── jsonfile.go
+│   │   └── jsonfile_test.go
+│   └── score/
+│       ├── score.go            # Entry, Store
+│       ├── jsonfile.go
 │       └── jsonfile_test.go
 ├── docs/superpowers/specs/
 └── README.md
@@ -228,21 +318,23 @@ yatzee_terminal/
 
 ## Critérios de aceitação
 
-1. `go run ./cmd/yatzee` no WSL abre o menu.
-2. Do menu dá para ir à tela de scores e voltar.
-3. `New Game` abre a tela de jogo; `tab` alterna rodadas e loja; `esc` volta ao menu.
-4. `Quit` no menu encerra limpando o terminal.
-5. `go run ./cmd/yatzee serve` e `ssh -p 2222 localhost` abrem o mesmo jogo pela rede.
-6. `go test ./...` passa.
-7. `go vet ./...` limpo.
+1. `go run ./cmd/yatzee` no WSL pergunta o nome na primeira execução e abre o menu.
+2. Rodar de novo vai direto pro menu, com o nome lembrado.
+3. Do menu dá para ir à tela de scores e voltar.
+4. `New Game` abre a tela de jogo; `tab` alterna rodadas e loja; `esc` volta ao menu.
+5. `Quit` no menu encerra limpando o terminal.
+6. `go run ./cmd/yatzee serve` e `ssh -p 2222 localhost` abrem o mesmo jogo pela
+   rede, perguntando o nome na primeira conexão e reconhecendo na segunda.
+7. `go test ./...` passa.
+8. `go vet ./...` limpo.
 
 ## Decisões postergadas
 
 - Mecânicas: dados, categorias de pontuação, estrutura de rodadas.
 - Economia e itens da loja.
-- Identidade do jogador: hoje é um nome digitado; no modo SSH a chave pública do
-  cliente é a identidade natural, mas isso depende das regras de score global.
-- Scores globais e banco de dados.
+- Scores globais, banco de dados e o que fazer quando duas chaves reivindicarem
+  o mesmo nome.
+- Trocar o nome depois de escolhido.
 
 ## Nota operacional
 
