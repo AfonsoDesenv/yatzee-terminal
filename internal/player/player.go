@@ -29,8 +29,9 @@ var (
 // expressa exatamente isso.
 var nameRE = regexp.MustCompile(`^[a-z0-9_-]+( [a-z0-9_-]+)?$`)
 
-// CleanName devolve o nome canônico ou ErrNameInvalid. É o único caminho para
-// um nome entrar no sistema, então nenhum chamador precisa lembrar de validar.
+// CleanName devolve o nome canônico ou ErrNameInvalid. É o validador que os
+// chamadores devem usar antes de reivindicar um nome: Claim aceita qualquer
+// string e não valida por conta própria.
 func CleanName(s string) (string, error) {
 	// Caractere de controle é recusado ANTES do trim. Ao contrário: o
 	// TrimSpace removeria o "\n" de "afonso\n" e um nome com controle

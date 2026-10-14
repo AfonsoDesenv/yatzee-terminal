@@ -30,6 +30,7 @@ go run ./cmd/yatzee
 make run     # joga local
 make serve   # sobe o servidor SSH em 0.0.0.0:2222
 make test    # go test ./...
+make test-race   # go test -race ./... (precisa de compilador C: sudo apt install build-essential)
 ```
 
 Para jogar no servidor local:
@@ -46,6 +47,15 @@ ssh -p 2222 localhost
 | `YATZEE_SSH_PORT` | `2222` | Porta do servidor |
 | `YATZEE_DATA_DIR` | `~/.local/share/yatzee` | Placar, jogadores e chave do host |
 | `YATZEE_SSH_HOST_KEY` | `$YATZEE_DATA_DIR/ssh_host_ed25519` | Chave do host, gerada no primeiro boot |
+
+## Operação
+
+- `YATZEE_DATA_DIR` precisa ser **persistente**. A chave do host SSH mora ali:
+  se ela se perder, é regenerada, e todo jogador que volta recebe
+  `REMOTE HOST IDENTIFICATION HAS CHANGED` e é recusado pelo próprio cliente SSH.
+- Rode **um processo por `YATZEE_DATA_DIR`**. O mutex do store é por processo:
+  jogar local enquanto o servidor roda sobre o mesmo diretório perde escritas em
+  silêncio, porque os dois carregam, os dois modificam e o último rename vence.
 
 ## Identidade
 

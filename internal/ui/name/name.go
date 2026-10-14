@@ -76,6 +76,9 @@ func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 // confirm valida, reivindica e anuncia. Erro aqui não é falha do sistema: a
 // tela mantém o texto e espera outro nome.
 func (s Screen) confirm() (ui.Screen, tea.Cmd) {
+	// Chamada síncrona de propósito: com um store em JSON local o custo é de
+	// microssegundos. Quando o store virar banco de dados, isto deve ir para um
+	// tea.Cmd, como faz a tela do placar.
 	ctx := context.Background()
 
 	name, err := player.CleanName(s.input.Value())
