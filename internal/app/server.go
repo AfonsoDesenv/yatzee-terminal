@@ -12,7 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/ssh"
 	"charm.land/wish/v2"
+	"charm.land/wish/v2/activeterm"
 	bm "charm.land/wish/v2/bubbletea"
+	wishrecover "charm.land/wish/v2/recover"
 	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/afonsodesenv/yatzee-terminal/internal/player"
@@ -63,18 +65,24 @@ func Serve(ctx context.Context) error {
 			return true
 		}),
 		wish.WithMiddleware(
-			bm.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-				model, err := sessionModel(s, cfg, players, scores)
-				if err != nil {
-					log.Printf("abrir sessão: %v", err)
-					wish.Errorln(s, "não consegui abrir o jogo agora, tente de novo")
-					return nil, nil
-				}
-				// MakeOptions não vai aqui: o middleware já a aplica, e
-				// chamar de novo duplicaria WithInput/WithOutput na mesma
-				// sessão.
-				return model, nil
-			}),
+			// Os de dentro rodam do último para o primeiro: activeterm barra quem
+			// não tem PTY antes de qualquer trabalho de store, e o recover isola
+			// um pânico fora do programa (ex.: em sessionModel) a esta conexão.
+			wishrecover.Middleware(
+				bm.Middleware(func(s ssh.Session) (tea.Model, []tea.ProgramOption) {
+					model, err := sessionModel(s, cfg, players, scores)
+					if err != nil {
+						log.Printf("abrir sessão: %v", err)
+						wish.Errorln(s, "não consegui abrir o jogo agora, tente de novo")
+						return nil, nil
+					}
+					// MakeOptions não vai aqui: o middleware já a aplica, e
+					// chamar de novo duplicaria WithInput/WithOutput na mesma
+					// sessão.
+					return model, nil
+				}),
+				activeterm.Middleware(),
+			),
 		),
 	)
 	if err != nil {
