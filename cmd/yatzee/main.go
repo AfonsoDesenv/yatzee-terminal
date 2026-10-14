@@ -1,5 +1,4 @@
-// Command yatzee é o jogo de dados no terminal. Sem argumento joga local; com
-// "serve" sobe o servidor SSH.
+// Command yatzee é o jogo de dados no terminal.
 package main
 
 import (
@@ -13,25 +12,18 @@ import (
 )
 
 func main() {
-	// SIGTERM e ctrl+c cancelam o contexto, e é isso que torna alcançável o
-	// desligamento gracioso do servidor: sem este fio, a goroutine que ouve
-	// ctx.Done() em Serve nunca dispara, e um systemctl stop ou docker stop
-	// espera o prazo inteiro antes de matar o processo à força.
+	// SIGTERM e ctrl+c cancelam o contexto. Serve para o jogo encerrar e
+	// devolver o terminal ao normal quando alguém mata o processo, em vez de
+	// deixar o alt-screen sujo.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	var err error
-	switch {
-	case len(os.Args) > 1 && os.Args[1] == "serve":
-		err = app.Serve(ctx)
-	case len(os.Args) > 1:
-		fmt.Fprintln(os.Stderr, "uso: yatzee [serve]")
+	if len(os.Args) > 1 {
+		fmt.Fprintln(os.Stderr, "uso: yatzee")
 		os.Exit(2)
-	default:
-		err = app.PlayLocal(ctx)
 	}
 
-	if err != nil {
+	if err := app.Run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "erro: %v\n", err)
 		os.Exit(1)
 	}

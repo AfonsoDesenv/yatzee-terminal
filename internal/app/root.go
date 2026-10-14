@@ -1,3 +1,4 @@
+// Package app monta o programa e roteia as telas.
 package app
 
 import (
@@ -5,15 +6,12 @@ import (
 
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui/game"
-	"github.com/afonsodesenv/yatzee-terminal/internal/ui/menu"
-	"github.com/afonsodesenv/yatzee-terminal/internal/ui/scores"
 )
 
 // Root é o model raiz: dono da pilha de telas e único lugar que conhece o
-// grafo de navegação. Telas emitem intenção; a tradução em empilhar, voltar ou
-// trocar acontece só aqui.
+// grafo de navegação. Telas emitem intenção; a tradução em empilhar ou voltar
+// acontece só aqui, e é o que permite nenhuma tela importar outra.
 type Root struct {
-	sess   *Session
 	stack  []ui.Screen
 	keys   ui.Keys
 	width  int
@@ -21,18 +19,14 @@ type Root struct {
 }
 
 // NewRoot monta a raiz com uma tela na base da pilha.
-func NewRoot(sess *Session, initial ui.Screen) Root {
+func NewRoot(initial ui.Screen) Root {
 	return Root{
-		sess:   sess,
 		stack:  []ui.Screen{initial},
 		keys:   ui.DefaultKeys(),
 		width:  ui.DefaultWidth,
 		height: ui.DefaultHeight,
 	}
 }
-
-// Session dá acesso à sessão desta conexão.
-func (m Root) Session() *Session { return m.sess }
 
 // Top é a tela visível.
 func (m Root) Top() ui.Screen { return m.stack[len(m.stack)-1] }
@@ -55,9 +49,9 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = w, h
 		if w != msg.Width || h != msg.Height {
 			// O renderer só se redimensiona com um WindowSizeMsg que passe pelo
-			// laço do Bubble Tea. Um cliente SSH que anuncia 0x0 deixaria o
-			// renderer vazio, então reemitimos o tamanho corrigido. Sem laço: o
-			// tamanho normalizado é ponto fixo de ui.Size, então a mensagem
+			// laço do Bubble Tea. Um tamanho zerado deixaria o renderer vazio e
+			// a tela em branco, então reemitimos o tamanho corrigido. Sem laço:
+			// o tamanho normalizado é ponto fixo de ui.Size, então a mensagem
 			// reemitida não cai neste ramo de novo — e é ela que chega às telas.
 			return m, func() tea.Msg { return tea.WindowSizeMsg{Width: w, Height: h} }
 		}
@@ -74,20 +68,11 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.QuitMsg:
 		return m, tea.Quit
 
-	case ui.ShowScoresMsg:
-		return m.pushWith(scores.New(m.sess.Scores))
-
 	case ui.StartGameMsg:
 		return m.pushWith(game.New())
 
 	case ui.BackMsg:
 		return m.pop(), nil
-
-	case ui.NameSetMsg:
-		// Troca em vez de empilhar: depois de se apresentar, esc não pode
-		// levar de volta pra tela de nome.
-		m.sess.Identity.Name = msg.Name
-		return m.replaceWith(menu.New(m.sess.Identity.Name))
 	}
 
 	return m.updateTop(msg)
@@ -127,28 +112,17 @@ func (m Root) push(s ui.Screen) Root {
 
 func (m Root) pop() Root {
 	if len(m.stack) <= 1 {
-		return m // base da pilha: voltar não encerra a sessão
+		return m // base da pilha: voltar não encerra o jogo
 	}
 	m = m.copyStack()
 	m.stack = m.stack[:len(m.stack)-1]
 	return m
 }
 
-func (m Root) replace(s ui.Screen) Root {
-	m = m.copyStack()
-	m.stack[len(m.stack)-1] = s
-	return m
-}
-
 // pushWith empilha e arma a tela. O Bubble Tea chama Init só no model raiz, uma
-// vez; sem devolver o Init da tela empilhada aqui, ela nunca carregaria nada.
+// vez; sem devolver o Init da tela empilhada aqui, ela nunca carregaria nada —
+// é o defeito que deixou a tela de placar presa em "carregando" antes.
 func (m Root) pushWith(s ui.Screen) (Root, tea.Cmd) {
 	m = m.push(s)
-	return m, s.Init()
-}
-
-// replaceWith troca a tela do topo e a arma, pelo mesmo motivo do pushWith.
-func (m Root) replaceWith(s ui.Screen) (Root, tea.Cmd) {
-	m = m.replace(s)
 	return m, s.Init()
 }

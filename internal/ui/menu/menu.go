@@ -2,7 +2,6 @@
 package menu
 
 import (
-	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -17,20 +16,18 @@ type item struct {
 
 // Screen é o menu principal.
 type Screen struct {
-	playerName string
-	items      []item
-	cursor     int
-	theme      ui.Theme
-	keys       ui.Keys
+	items  []item
+	cursor int
+	theme  ui.Theme
+	keys   ui.Keys
 }
 
-// New monta o menu já sabendo quem está jogando.
-func New(playerName string) Screen {
+// New monta o menu. A tabela carrega a intenção de cada item, então Update não
+// tem switch por índice e acrescentar um item é acrescentar uma linha.
+func New() Screen {
 	return Screen{
-		playerName: playerName,
 		items: []item{
 			{label: "novo jogo", intent: ui.StartGame},
-			{label: "placar", intent: ui.ShowScores},
 			{label: "sair", intent: ui.Quit},
 		},
 		theme: ui.NewTheme(),
@@ -76,9 +73,6 @@ func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 func (s Screen) View() string {
 	b := &strings.Builder{}
 	b.WriteString(s.theme.Title.Render("yatzee"))
-	if s.playerName != "" {
-		b.WriteString(s.theme.Dim.Render(fmt.Sprintf("   jogando como %s", s.playerName)))
-	}
 	b.WriteString("\n\n")
 
 	for i, it := range s.items {

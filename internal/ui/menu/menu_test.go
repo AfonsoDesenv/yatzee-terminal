@@ -29,7 +29,7 @@ func teclaMsg(nome string) tea.KeyPressMsg {
 }
 
 func TestCursorAndaEParaNasPontas(t *testing.T) {
-	s := New("afonso")
+	s := New()
 	if s.Cursor() != 0 {
 		t.Fatalf("cursor inicial = %d, quero 0", s.Cursor())
 	}
@@ -38,17 +38,10 @@ func TestCursorAndaEParaNasPontas(t *testing.T) {
 	if s.Cursor() != 1 {
 		t.Errorf("cursor após down = %d, quero 1", s.Cursor())
 	}
+
 	s, _ = tecla(s, "j")
-	if s.Cursor() != 2 {
-		t.Errorf("cursor após j = %d, quero 2", s.Cursor())
-	}
-	s, _ = tecla(s, "down") // já no fim
-	if s.Cursor() != 2 {
-		t.Errorf("cursor após down no fim = %d, quero 2", s.Cursor())
-	}
-	s, _ = tecla(s, "k")
 	if s.Cursor() != 1 {
-		t.Errorf("cursor após k = %d, quero 1", s.Cursor())
+		t.Errorf("cursor após j no fim = %d, quero 1 (não deve passar do limite)", s.Cursor())
 	}
 
 	// "up" literal tem que mover de verdade antes de o teste do limite
@@ -65,17 +58,16 @@ func TestCursorAndaEParaNasPontas(t *testing.T) {
 	}
 }
 
-func TestEnterEmitAIntencaoDoItemSelecionado(t *testing.T) {
+func TestEnterEmiteAIntencaoDoItemSelecionado(t *testing.T) {
 	casos := []struct {
 		descidas int
 		quero    tea.Msg
 	}{
 		{0, ui.StartGameMsg{}},
-		{1, ui.ShowScoresMsg{}},
-		{2, ui.QuitMsg{}},
+		{1, ui.QuitMsg{}},
 	}
 	for _, c := range casos {
-		s := New("afonso")
+		s := New()
 		for range c.descidas {
 			s, _ = tecla(s, "down")
 		}
@@ -90,7 +82,7 @@ func TestEnterEmitAIntencaoDoItemSelecionado(t *testing.T) {
 }
 
 func TestTeclaQSai(t *testing.T) {
-	_, cmd := tecla(New("afonso"), "q")
+	_, cmd := tecla(New(), "q")
 	if cmd == nil {
 		t.Fatal("q não devolveu comando")
 	}
@@ -99,19 +91,23 @@ func TestTeclaQSai(t *testing.T) {
 	}
 }
 
-// esc no menu não faz nada: é a base da pilha, e sair exige q ou ctrl+c.
+// esc no menu não faz nada: é a base da pilha, e sair exige q ou ctrl+c, para
+// ninguém encerrar o jogo por reflexo de voltar.
 func TestEscNaoEmiteNada(t *testing.T) {
-	_, cmd := New("afonso").Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	_, cmd := New().Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if cmd != nil {
 		t.Errorf("esc no menu devolveu comando %v", cmd())
 	}
 }
 
-func TestViewMostraONomeEOsItens(t *testing.T) {
-	v := New("afonso").View()
-	for _, termo := range []string{"afonso", "novo jogo", "placar", "sair"} {
+func TestViewMostraOsItens(t *testing.T) {
+	v := New().View()
+	for _, termo := range []string{"yatzee", "novo jogo", "sair"} {
 		if !strings.Contains(v, termo) {
 			t.Errorf("View() não contém %q:\n%s", termo, v)
 		}
+	}
+	if strings.Contains(v, "placar") {
+		t.Errorf("View() ainda oferece placar, que saiu do escopo:\n%s", v)
 	}
 }
