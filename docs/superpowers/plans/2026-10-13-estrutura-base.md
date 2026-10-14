@@ -1,3 +1,8 @@
+> **SUPERADO em 2026-10-14.** Plano de execucao da estrutura com servidor SSH,
+> identidade e placar. As doze tasks foram concluidas e depois a maior parte foi
+> removida por mudanca de escopo. Fica como registro de execucao; o desenho
+> vigente esta em `../specs/2026-10-14-jogo-local-design.md`.
+
 # Yatzee Terminal — Estrutura Base: Plano de Implementação
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

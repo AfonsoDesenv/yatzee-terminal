@@ -1,3 +1,9 @@
+> **SUPERADO em 2026-10-14.** Este documento desenha um servidor SSH com
+> identidade por chave publica e placar persistido. A ideia foi abandonada: o
+> jogador baixa os fontes e roda no proprio terminal. O desenho vigente esta em
+> `2026-10-14-jogo-local-design.md`. Fica aqui como registro, e o codigo
+> correspondente e recuperavel no commit `5bc34ea`.
+
 # Yatzee Terminal — Estrutura Base
 
 **Data:** 2026-10-13

@@ -1,3 +1,7 @@
+> **Contexto historico.** Varias destas decisoes tratam do servidor SSH, da
+> identidade e do placar, que foram removidos em 2026-10-14. As que seguem
+> valendo sao as de navegacao, de forca de teste e de ferramental.
+
 # Decisões que eu tomei sozinho — estrutura base
 
 Executando o plano por subagentes, cada conflito, ambiguidade ou defeito do
