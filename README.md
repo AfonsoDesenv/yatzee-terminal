@@ -16,28 +16,55 @@ disco e não acessa a rede.
 
 ## Rodar
 
-Precisa de Go 1.27 ou mais novo.
+O jogo é um binário único sem dependência de runtime. Para compilá-lo você
+precisa de Go 1.27 ou mais novo — depois disso, só o executável.
 
-```bash
-go run ./cmd/yatzee
+### Já tem o executável
+
+```powershell
+.\bin\yatzee.exe    # Windows
 ```
 
-Para gerar um binário:
+```bash
+./bin/yatzee        # Linux e macOS
+```
+
+### Compilar no Windows
+
+Precisa do Go instalado no Windows (`winget install GoLang.Go`, ou de
+<https://go.dev/dl/>). Depois:
+
+```powershell
+go build -o bin\yatzee.exe .\cmd\yatzee
+.\bin\yatzee.exe
+```
+
+### Compilar no Linux, macOS ou WSL
 
 ```bash
 go build -o bin/yatzee ./cmd/yatzee
 ./bin/yatzee
 ```
 
-O `Makefile` faz o mesmo, mas usa `$(HOME)/.local/go/bin/go`, que é onde o Go
-está instalado no ambiente de desenvolvimento deste projeto. Se o seu Go
-estiver em outro lugar, use os comandos acima direto.
+Ou direto, sem gerar arquivo: `go run ./cmd/yatzee`.
+
+### Nota sobre este ambiente de desenvolvimento
+
+Neste repositório o Go está instalado **dentro do WSL**, em
+`~/.local/go/bin/go`, e não no lado Windows — então `go` não funciona no
+PowerShell aqui. Os alvos do `make` assumem esse caminho. Para gerar o `.exe`
+a partir do WSL:
 
 ```bash
-make run        # joga
-make test       # go test ./...
-make test-race  # idem com detector de corrida (precisa de compilador C)
-make build      # binario em bin/yatzee
+make build-windows
+```
+
+```bash
+make run           # joga (dentro do WSL)
+make test          # go test ./...
+make test-race     # idem com detector de corrida (precisa de compilador C)
+make build         # binario linux em bin/yatzee
+make build-windows # binario windows em bin/yatzee.exe
 ```
 
 ## Teclas

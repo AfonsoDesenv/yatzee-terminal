@@ -1,6 +1,6 @@
 GO := $(HOME)/.local/go/bin/go
 
-.PHONY: run test test-race vet build
+.PHONY: run test test-race vet build build-windows
 
 run:
 	$(GO) run ./cmd/yatzee
@@ -17,3 +17,6 @@ vet:
 
 build:
 	$(GO) build -o bin/yatzee ./cmd/yatzee
+
+build-windows:
+	GOOS=windows GOARCH=amd64 $(GO) build -o bin/yatzee.exe ./cmd/yatzee
