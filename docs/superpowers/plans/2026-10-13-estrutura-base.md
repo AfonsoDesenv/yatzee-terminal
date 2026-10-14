@@ -2127,8 +2127,8 @@ import (
 	"errors"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/afonsodesenv/yatzee-terminal/internal/player"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
