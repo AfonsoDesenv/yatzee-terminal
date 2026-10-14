@@ -19,6 +19,7 @@ desde agora.
 
 - Identidade do jogador por chave pública SSH: primeira conexão pergunta o nome,
   as seguintes reconhecem a pessoa
+- Nome único e definitivo: se já estiver em uso, a tela acusa o erro e pede outro
 - Tela de menu (New Game / Scores / Quit)
 - Tela de scores lendo os melhores jogadores do armazenamento local. Sem
   gameplay ainda não existem partidas, então ela renderiza um estado vazio
@@ -33,6 +34,7 @@ desde agora.
 
 - Regras do jogo (dados, pontuação, rodadas), economia e itens da loja
 - Scores globais compartilhados e banco de dados
+- **Trocar o nome depois de escolhido** — nesta versão o nome é definitivo
 - Web terminal (ttyd), Dockerfile e configuração do Cloudflare Tunnel
 - Rate limit e log de abuso
 
@@ -167,11 +169,41 @@ type Player struct {
     LastSeen  time.Time `json:"last_seen"`
 }
 
+var ErrNameTaken = errors.New("nome já está em uso")
+
 type Store interface {
     Get(ctx context.Context, id string) (Player, bool, error)
-    Save(ctx context.Context, p Player) error
+    // Claim grava id→nome se o nome estiver livre, senão devolve ErrNameTaken.
+    // A verificação e a escrita acontecem sob o mesmo lock: duas sessões
+    // reivindicando o mesmo nome no mesmo instante, uma só ganha.
+    Claim(ctx context.Context, id, name string) (Player, error)
+    Touch(ctx context.Context, id string) error // atualiza LastSeen
 }
 ```
+
+### Nome
+
+Único, definitivo e primeiro que chegar leva. Regras de validação, aplicadas
+pelo pacote `player` (não pela UI, para valerem igual em qualquer entrada):
+
+| Regra | Valor | Motivo |
+|---|---|---|
+| Comprimento | 3 a 16 colunas de exibição | O placar precisa alinhar; largura medida com `lipgloss.Width`, não `len`, por causa de acento e emoji |
+| Espaços nas pontas | Removidos | `"afonso "` e `"afonso"` são a mesma pessoa |
+| Unicidade | Case-insensitive | Impede que "Afonso" e "afonso" coexistam e se passem um pelo outro; a grafia original é preservada na exibição |
+| Caracteres de controle e ANSI | Rejeitados | Nome é renderizado no placar: uma sequência de escape dentro dele quebra o layout de todos ou falsifica a tela |
+
+A chave de unicidade é o nome normalizado (minúsculo, sem espaços nas pontas);
+`Player.Name` guarda o que a pessoa digitou. Erro de nome em uso não é falha do
+sistema: a tela mantém o texto digitado, mostra a mensagem e espera outro nome.
+
+**Consequência aceita nesta versão:** nome tomado é nome perdido para sempre, e
+quem errou a digitação na primeira conexão fica com o erro. Trocar nome entra
+numa versão futura.
+
+**Convidado** (SSH sem chave) escolhe nome sob as mesmas regras e o nome também
+precisa estar livre — senão qualquer um se passaria por um jogador registrado no
+placar. Mas o nome dele não é reservado, porque a identidade não persiste.
 
 Como cada modo monta a identidade:
 
@@ -274,6 +306,12 @@ serviço iniciado pelo systemd ou por container tem CWD imprevisível.
 - **Identidade**: tela inicial é Name quando o ID é desconhecido e Menu quando
   conhecido; convidado não é persistido; `Replace` não deixa volta pra tela de
   nome.
+- **Nome**: cada regra de validação com seu caso de rejeição (curto, longo, só
+  espaço, com ANSI embutido); `Claim` do mesmo nome em grafia diferente devolve
+  `ErrNameTaken`; a tela preserva o texto digitado ao mostrar o erro.
+- **Corrida de `Claim`**: duas goroutines reivindicando o mesmo nome ao mesmo
+  tempo — exatamente uma vence e a outra recebe `ErrNameTaken`. Rodar com
+  `-race`.
 - **Persistência**: round-trip de salvar e ler, ordenação do `Top`, e escrita
   concorrente de duas sessões sem corromper o arquivo.
 
@@ -325,16 +363,19 @@ yatzee_terminal/
 5. `Quit` no menu encerra limpando o terminal.
 6. `go run ./cmd/yatzee serve` e `ssh -p 2222 localhost` abrem o mesmo jogo pela
    rede, perguntando o nome na primeira conexão e reconhecendo na segunda.
-7. `go test ./...` passa.
-8. `go vet ./...` limpo.
+7. Tentar um nome já usado mostra o erro na própria tela e aceita outro nome em
+   seguida, sem derrubar a sessão.
+8. `go test -race ./...` passa.
+9. `go vet ./...` limpo.
 
 ## Decisões postergadas
 
 - Mecânicas: dados, categorias de pontuação, estrutura de rodadas.
 - Economia e itens da loja.
-- Scores globais, banco de dados e o que fazer quando duas chaves reivindicarem
-  o mesmo nome.
-- Trocar o nome depois de escolhido.
+- Scores globais e banco de dados.
+- Trocar o nome depois de escolhido, e o que fazer com nome de jogador inativo.
+- Se partida de convidado pode pontuar no placar, já que a identidade dele não
+  persiste.
 
 ## Nota operacional
 
