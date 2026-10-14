@@ -6,3 +6,6 @@
 # Dados locais e chaves
 /.data/
 ssh_host_*
+
+# Workspace do SDD (scratch, nao versionado)
+/.superpowers/

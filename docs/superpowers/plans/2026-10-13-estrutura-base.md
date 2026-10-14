@@ -14,7 +14,15 @@
 
 Valem para toda task. Violar qualquer uma destas é motivo de rejeição na review.
 
-- **Go toolchain:** `go1.27.2`, instalado em `~/.local/go/bin` no WSL. Todo comando Go roda com `export PATH=$HOME/.local/go/bin:$PATH`.
+- **Go toolchain:** `go1.27.2`, instalado em `~/.local/go/bin` **dentro do WSL**. O repositório fica no disco do Windows, então todo comando Go roda através do WSL, nunca direto:
+
+  ```bash
+  wsl -e bash -lc 'export PATH=$HOME/.local/go/bin:$PATH; cd /mnt/c/GIT/yatzee_terminal && go test -race ./...'
+  ```
+
+  Os comandos `go ...` escritos nas tasks são a parte interna: embrulhe cada um
+  nesse formato. Não existe Go no lado Windows — chamar `go` direto falha com
+  "command not found".
 - **Module path:** `github.com/afonsodesenv/yatzee-terminal`.
 - **Imports v2 vêm de `charm.land`**, nunca de `github.com/charmbracelet`. O caminho antigo existe e compila na v1, com API diferente — errar aqui gera erro de tipo confuso.
 - **Zero estado mutável de pacote.** Nenhuma variável global que mude em runtime. Várias sessões vivem no mesmo processo.
@@ -1676,6 +1684,7 @@ import (
 type Root struct {
 	sess   *Session
 	stack  []ui.Screen
+	keys   ui.Keys
 	width  int
 	height int
 }
@@ -1685,6 +1694,7 @@ func NewRoot(sess *Session, initial ui.Screen) Root {
 	return Root{
 		sess:   sess,
 		stack:  []ui.Screen{initial},
+		keys:   ui.DefaultKeys(),
 		width:  ui.DefaultWidth,
 		height: ui.DefaultHeight,
 	}
@@ -1714,8 +1724,9 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		// ctrl+c sai de qualquer lugar, sem passar pela tela.
-		if msg.String() == "ctrl+c" {
+		// Sai de qualquer lugar, sem passar pela tela. Vem do mapa de teclas,
+		// não de um literal: keybinding mora num lugar só.
+		if m.keys.Matches(msg.String(), m.keys.ForceQuit) {
 			return m, tea.Quit
 		}
 
@@ -1786,10 +1797,14 @@ func (m Root) replace(s ui.Screen) Root {
 
 Nota: este arquivo importa as telas das Tasks 7 a 10. Até elas existirem o pacote não compila — por isso o teste desta task roda junto com a Task 10. Para fechar esta task, crie os três arquivos de tela como esqueleto mínimo que satisfaz o compilador e preencha nas tasks seguintes:
 
-`internal/ui/menu/menu.go`, `internal/ui/scores/scores.go`, `internal/ui/game/game.go` com apenas:
+Os três esqueletos, com as assinaturas exatas que `root.go` chama e os títulos
+que os testes de navegação conferem. Cada um vira o arquivo completo da sua
+task depois.
+
+`internal/ui/menu/menu.go`:
 
 ```go
-package menu // e analogamente scores e game
+package menu
 
 import (
 	tea "charm.land/bubbletea/v2"
@@ -1797,14 +1812,63 @@ import (
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
 )
 
+// Screen é o menu. Esqueleto: preenchido na Task 8.
 type Screen struct{}
 
-func New(name string) Screen { return Screen{} } // scores.New(store), game.New()
+// New monta o menu sabendo quem joga.
+func New(playerName string) Screen { return Screen{} }
 
-func (s Screen) Init() tea.Cmd                      { return nil }
+func (s Screen) Init() tea.Cmd                       { return nil }
 func (s Screen) Update(tea.Msg) (ui.Screen, tea.Cmd) { return s, nil }
 func (s Screen) View() string                        { return "" }
-func (s Screen) Title() string                       { return "menu" } // "scores", "jogo"
+func (s Screen) Title() string                       { return "menu" }
+```
+
+`internal/ui/scores/scores.go`:
+
+```go
+package scores
+
+import (
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/afonsodesenv/yatzee-terminal/internal/score"
+	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
+)
+
+// Screen é o placar. Esqueleto: preenchido na Task 9.
+type Screen struct{}
+
+// New monta a tela com o store de que ela precisa.
+func New(store score.Store) Screen { return Screen{} }
+
+func (s Screen) Init() tea.Cmd                       { return nil }
+func (s Screen) Update(tea.Msg) (ui.Screen, tea.Cmd) { return s, nil }
+func (s Screen) View() string                        { return "" }
+func (s Screen) Title() string                       { return "scores" }
+```
+
+`internal/ui/game/game.go`:
+
+```go
+package game
+
+import (
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
+)
+
+// Screen é a partida. Esqueleto: preenchido na Task 10.
+type Screen struct{}
+
+// New começa uma partida.
+func New() Screen { return Screen{} }
+
+func (s Screen) Init() tea.Cmd                       { return nil }
+func (s Screen) Update(tea.Msg) (ui.Screen, tea.Cmd) { return s, nil }
+func (s Screen) View() string                        { return "" }
+func (s Screen) Title() string                       { return "jogo" }
 ```
 
 - [ ] **Step 6: Rodar os testes de navegação**
@@ -2873,7 +2937,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: tudo das tasks anteriores
-- Produces: `app.FirstScreen(sess *Session) ui.Screen`, `app.PlayLocal(ctx context.Context) error`, `app.LocalIdentity(ctx, Config, player.Store) (player.Identity, error)`
+- Produces: `app.FirstScreen(sess *Session) ui.Screen`, `app.PlayLocal(ctx context.Context) error`, `localIdentityFor(ctx context.Context, osUser string, store player.Store) (player.Identity, error)` (não exportada: só o pacote `app` monta identidade)
 
 - [ ] **Step 1: Escrever o teste da primeira tela**
 
@@ -3359,7 +3423,9 @@ func Serve(ctx context.Context) error {
 	}()
 
 	log.Printf("yatzee ouvindo ssh em %s:%s", cfg.SSHHost, cfg.SSHPort)
-	if err := srv.ListenAndServe(); err != nil && !isClosed(err) {
+	// Fechar o servidor de propósito não é erro. Comparar com a sentinela, não
+	// com o texto da mensagem.
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
 		return fmt.Errorf("servir ssh: %w", err)
 	}
 	return nil
@@ -3388,11 +3454,10 @@ func sessionModel(s ssh.Session, cfg Config, players player.Store, scores score.
 
 	return NewRoot(sess, FirstScreen(sess)), nil
 }
-
-func isClosed(err error) bool {
-	return err != nil && err.Error() == "ssh: Server closed"
-}
 ```
+
+Imports de `server.go`: além dos listados no bloco, `"errors"` para o
+`errors.Is` do `ErrServerClosed`.
 
 - [ ] **Step 4: Rodar os testes**
 
