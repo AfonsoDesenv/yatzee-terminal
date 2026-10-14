@@ -3194,7 +3194,10 @@ func PlayLocal(ctx context.Context) error {
 		_ = players.Touch(ctx, id.ID)
 	}
 
-	if _, err := tea.NewProgram(NewRoot(sess, FirstScreen(sess))).Run(); err != nil {
+	// WithContext liga o cancelamento ao programa. Sem isto o ctx chega
+	// apenas aos stores, e um SIGTERM nao encerraria a partida local.
+	prog := tea.NewProgram(NewRoot(sess, FirstScreen(sess)), tea.WithContext(ctx))
+	if _, err := prog.Run(); err != nil {
 		return fmt.Errorf("rodar o jogo: %w", err)
 	}
 	return nil
@@ -3291,9 +3294,29 @@ Crie `README.md`:
 
 Jogo de dados no terminal, com progressão e loja inspiradas em Balatro.
 
+## Estado atual
+
+A estrutura está de pé; as mecânicas do jogo não. O que funciona hoje:
+
+- Identidade: o jogo pergunta seu nome na primeira vez e lembra nas seguintes
+- Navegação: menu, placar e a tela de partida, com `tab` alternando rodada e loja
+- Servidor SSH, com identidade por chave pública
+
+O que **ainda não existe**: os dados, a pontuação e os itens da loja. As duas
+fases da partida são telas vazias com o texto dizendo o que vem ali. O placar
+funciona, mas fica vazio até haver partidas para registrar.
+
 ## Rodar
 
 Precisa de Go 1.27 ou mais novo.
+
+Os alvos do `make` usam `$(HOME)/.local/go/bin/go`, que é onde o Go está
+instalado no WSL deste projeto. Se o seu Go estiver em outro lugar, chame o
+comando direto em vez do `make`:
+
+```bash
+go run ./cmd/yatzee
+```
 
 ```bash
 make run     # joga local
