@@ -30,7 +30,9 @@ func rootDeTeste(t *testing.T, inicial ui.Screen) Root {
 func passo(m Root, msg tea.Msg) Root {
 	next, cmd := m.Update(msg)
 	m = next.(Root)
-	for cmd != nil {
+	// Cap de iterações: uma tela que devolvesse comando a cada Update
+	// travaria o teste em laço infinito em vez de falhar com mensagem.
+	for i := 0; cmd != nil && i < 10; i++ {
 		produced := cmd()
 		if produced == nil {
 			break
@@ -99,8 +101,17 @@ func TestNameSetTrocaATelaSemDeixarVolta(t *testing.T) {
 
 func TestWindowSizeZeroCaiNoDefault(t *testing.T) {
 	m := rootDeTeste(t, telaFake{nome: "menu"})
-	m = passo(m, tea.WindowSizeMsg{Width: 0, Height: 0})
 
+	// Primeiro um tamanho real, para o estado deixar de ser o default. Sem
+	// este passo o teste passaria mesmo se o tratamento de WindowSizeMsg
+	// fosse removido, porque NewRoot já começa no default — e aí uma
+	// regressão que apagasse o fallback 0x0 passaria batida.
+	m = passo(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	if w, h := m.Size(); w != 120 || h != 40 {
+		t.Fatalf("Size() = (%d, %d), quero (120, 40)", w, h)
+	}
+
+	m = passo(m, tea.WindowSizeMsg{Width: 0, Height: 0})
 	w, h := m.Size()
 	if w != ui.DefaultWidth || h != ui.DefaultHeight {
 		t.Errorf("Size() = (%d, %d), quero (%d, %d)", w, h, ui.DefaultWidth, ui.DefaultHeight)
