@@ -417,7 +417,7 @@ yatzee_terminal/
    rede, perguntando o nome na primeira conexão e reconhecendo na segunda.
 7. Tentar um nome já usado mostra o erro na própria tela e aceita outro nome em
    seguida, sem derrubar a sessão.
-8. `go test -race ./...` passa.
+8. `go test ./...` passa. O detector de corrida (`make test-race`) exige um compilador C instalado (`sudo apt install build-essential`) e não roda sem ele.
 9. `go vet ./...` limpo.
 
 ## Decisões postergadas

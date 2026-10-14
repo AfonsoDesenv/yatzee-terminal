@@ -17,7 +17,7 @@ Valem para toda task. Violar qualquer uma destas é motivo de rejeição na revi
 - **Go toolchain:** `go1.27.2`, instalado em `~/.local/go/bin` **dentro do WSL**. O repositório fica no disco do Windows, então todo comando Go roda através do WSL, nunca direto:
 
   ```bash
-  wsl -e bash -lc 'export PATH=$HOME/.local/go/bin:$PATH; cd /mnt/c/GIT/yatzee_terminal && go test -race ./...'
+  wsl -e bash -lc 'export PATH=$HOME/.local/go/bin:$PATH; cd /mnt/c/GIT/yatzee_terminal && go test ./...'
   ```
 
   Os comandos `go ...` escritos nas tasks são a parte interna: embrulhe cada um
@@ -154,6 +154,24 @@ func TestLoadConfigTornaDataDirAbsoluto(t *testing.T) {
 		t.Errorf("DataDir = %q, quero absoluto", cfg.DataDir)
 	}
 }
+
+// A mesma garantia vale para o override da chave do host: é justamente o
+// cenário que a regra existe para evitar (unit do systemd com caminho relativo).
+func TestLoadConfigTornaHostKeyAbsoluta(t *testing.T) {
+	t.Setenv("YATZEE_DATA_DIR", t.TempDir())
+	t.Setenv("YATZEE_SSH_HOST_KEY", "chave-relativa")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !filepath.IsAbs(cfg.SSHHostKey) {
+		t.Errorf("SSHHostKey = %q, quero absoluto", cfg.SSHHostKey)
+	}
+	if filepath.Base(cfg.SSHHostKey) != "chave-relativa" {
+		t.Errorf("SSHHostKey = %q, quero preservar o nome do arquivo", cfg.SSHHostKey)
+	}
+}
 ```
 
 - [ ] **Step 3: Rodar o teste e confirmar que falha**
@@ -204,6 +222,14 @@ func LoadConfig() (Config, error) {
 	hostKey := os.Getenv("YATZEE_SSH_HOST_KEY")
 	if hostKey == "" {
 		hostKey = filepath.Join(dataDir, "ssh_host_ed25519")
+	} else {
+		// Override do operador também precisa ser absoluto, pelo mesmo motivo
+		// do DataDir: um serviço não escolhe o próprio CWD.
+		abs, absErr := filepath.Abs(hostKey)
+		if absErr != nil {
+			return Config{}, fmt.Errorf("resolver caminho absoluto de %q: %w", hostKey, absErr)
+		}
+		hostKey = abs
 	}
 
 	return Config{
@@ -238,7 +264,7 @@ Expected: PASS nos três testes
 ```makefile
 GO := $(HOME)/.local/go/bin/go
 
-.PHONY: run serve test vet build
+.PHONY: run serve test test-race vet build
 
 run:
 	$(GO) run ./cmd/yatzee
@@ -247,7 +273,11 @@ serve:
 	$(GO) run ./cmd/yatzee serve
 
 test:
-	$(GO) test -race ./...
+	$(GO) test ./...
+
+test-race:
+	@command -v gcc >/dev/null || { echo "precisa de compilador C: sudo apt install build-essential"; exit 1; }
+	CGO_ENABLED=1 $(GO) test -race ./...
 
 vet:
 	$(GO) vet ./...
@@ -838,7 +868,7 @@ func (s *JSONStore) save(data playersFile) error {
 
 - [ ] **Step 4: Rodar os testes com detector de corrida**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./internal/player/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/player/ -v`
 Expected: PASS em tudo, sem aviso de corrida
 
 - [ ] **Step 5: Commit**
@@ -1144,7 +1174,7 @@ func (s *JSONStore) save(data scoresFile) error {
 
 - [ ] **Step 5: Rodar os testes com detector de corrida**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./internal/score/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/score/ -v`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -1873,7 +1903,7 @@ func (s Screen) Title() string                       { return "jogo" }
 
 - [ ] **Step 6: Rodar os testes de navegação**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./internal/app/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/app/ -v`
 Expected: PASS nos sete testes de navegação
 
 - [ ] **Step 7: Commit**
@@ -2197,7 +2227,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./internal/ui/name/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/name/ -v`
 Expected: PASS nos sete testes
 
 - [ ] **Step 5: Commit**
@@ -2447,7 +2477,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./internal/ui/menu/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/menu/ -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -2676,7 +2706,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar os testes e confirmar que passam**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./internal/ui/scores/ -v`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./internal/ui/scores/ -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -2912,7 +2942,7 @@ func (s Screen) View() string {
 
 - [ ] **Step 4: Rodar a suíte inteira**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./... && go vet ./...`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./... && go vet ./...`
 Expected: PASS em tudo, incluindo os testes de navegação da Task 6 que dependiam destas telas
 
 - [ ] **Step 5: Commit**
@@ -3176,7 +3206,7 @@ func Serve(context.Context) error { return errors.New("modo servidor ainda não 
 
 ```bash
 export PATH=$HOME/.local/go/bin:$PATH
-go test -race ./... && go vet ./...
+go test ./... && go vet ./...
 YATZEE_DATA_DIR=/tmp/yatzee-manual go run ./cmd/yatzee
 ```
 
@@ -3198,7 +3228,7 @@ Precisa de Go 1.27 ou mais novo.
 ```bash
 make run     # joga local
 make serve   # sobe o servidor SSH em 0.0.0.0:2222
-make test    # go test -race ./...
+make test    # go test ./...
 ```
 
 Para jogar no servidor local:
@@ -3461,7 +3491,7 @@ Imports de `server.go`: além dos listados no bloco, `"errors"` para o
 
 - [ ] **Step 4: Rodar os testes**
 
-Run: `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./... && go vet ./...`
+Run: `export PATH=$HOME/.local/go/bin:$PATH && go test ./... && go vet ./...`
 Expected: PASS em tudo
 
 - [ ] **Step 5: Verificar o servidor de verdade**
@@ -3505,7 +3535,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 Rodar depois da última task, antes de declarar a estrutura pronta.
 
-- [ ] `export PATH=$HOME/.local/go/bin:$PATH && go test -race ./...` — tudo passa
+- [ ] `export PATH=$HOME/.local/go/bin:$PATH && go test ./...` — tudo passa
 - [ ] `go vet ./...` — limpo
 - [ ] `go build -o bin/yatzee ./cmd/yatzee` — compila
 - [ ] `grep -rn "math/rand\"" --include=*.go .` — nenhum uso do rand global (só `math/rand/v2`)
