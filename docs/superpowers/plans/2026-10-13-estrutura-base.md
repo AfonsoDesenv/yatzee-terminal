@@ -1485,10 +1485,10 @@ type telaFake struct {
 	cmd  tea.Cmd
 }
 
-func (t telaFake) Init() tea.Cmd                         { return nil }
-func (t telaFake) Update(tea.Msg) (ui.Screen, tea.Cmd)   { return t, t.cmd }
-func (t telaFake) View() string  { return "tela " + t.nome }
-func (t telaFake) Title() string { return t.nome }
+func (t telaFake) Init() tea.Cmd                       { return nil }
+func (t telaFake) Update(tea.Msg) (ui.Screen, tea.Cmd) { return t, t.cmd }
+func (t telaFake) View() string                        { return "tela " + t.nome }
+func (t telaFake) Title() string                       { return t.nome }
 
 func rootDeTeste(t *testing.T, inicial ui.Screen) Root {
 	t.Helper()
