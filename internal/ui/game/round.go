@@ -139,20 +139,36 @@ func (s Screen) mesa(largura, altura int) string {
 	if meio < 20 {
 		meio = 20
 	}
-	// Mesa de dados, centralizada na largura.
+	// Mesa de dados, centralizada na largura. O dado escolhido para o reroll
+	// vai de vermelho inteiro — cubo, traço e rótulo —, porque os três são um
+	// sinal só: pintar apenas um pedaço deixaria a escolha pela metade.
 	var ds [][]string
-	for _, v := range s.partida.Dados {
-		ds = append(ds, ui.Dado(v))
+	for i, v := range s.partida.Dados {
+		d := ui.Dado(v)
+		if s.partida.Marcados[i] {
+			d = ui.Pinta(s.theme.DadoMarcado, d)
+		}
+		ds = append(ds, d)
 	}
+
 	var marcas, rotulos strings.Builder
 	for i := range s.partida.Dados {
 		marcado := s.partida.Marcados[i]
-		marcas.WriteString(ui.MarcaDado(marcado))
+
+		marca := ui.MarcaDado(marcado)
 		rot := fmt.Sprintf("[%d]", i+1)
 		if marcado {
 			rot = fmt.Sprintf(">%d<", i+1)
 		}
-		rotulos.WriteString(ui.Centraliza(rot, ui.LarguraDado))
+		rot = ui.Centraliza(rot, ui.LarguraDado)
+
+		if marcado {
+			marca = s.theme.DadoMarcado.Render(marca)
+			rot = s.theme.DadoMarcado.Render(rot)
+		}
+		marcas.WriteString(marca)
+		rotulos.WriteString(rot)
+
 		if i < len(s.partida.Dados)-1 {
 			marcas.WriteString("  ")
 			rotulos.WriteString("  ")

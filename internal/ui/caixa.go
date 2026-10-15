@@ -17,9 +17,11 @@ func Largura(s string) int { return lipgloss.Width(s) }
 func Centraliza(s string, largura int) string {
 	l := Largura(s)
 	if l >= largura {
-		r := []rune(s)
-		if len(r) > largura {
-			return string(r[:largura])
+		// Corta em células: contando por rune, os bytes de um escape ANSI
+		// entrariam na conta e o corte cairia no meio da marcação, estragando
+		// a linha inteira em vez de encurtá-la.
+		if cs := celulas(s); len(cs) > largura {
+			return junta(cs[:largura])
 		}
 		return s
 	}
@@ -133,9 +135,10 @@ func Moldura(conteudo string, largura, altura int) string {
 			l = linhas[i]
 		}
 		// Corta o que passar da largura: conteúdo vazando quebraria a borda.
+		// O corte é em células, para não partir um escape ANSI no meio e
+		// despejar os bytes dele na tela.
 		if Largura(l) > interno {
-			r := []rune(l)
-			l = string(r[:interno])
+			l = junta(celulas(l)[:interno])
 		}
 		b.WriteString("|" + l + strings.Repeat(" ", interno-Largura(l)) + "|\n")
 	}
@@ -161,15 +164,17 @@ func SobreOpaco(fundo, bloco []string) []string {
 		if y < 0 || y >= len(out) {
 			continue
 		}
-		base := []rune(out[y])
+		// Em células, como em Compoe: é o que deixa o modal e o fundo serem
+		// pintados sem a marcação ocupar coluna e empurrar o desenho.
+		base := celulas(out[y])
 		x := (len(base) - larguraBloco) / 2
 		preenchido := l + strings.Repeat(" ", larguraBloco-Largura(l))
-		for k, ch := range []rune(preenchido) {
+		for k, c := range celulas(preenchido) {
 			if p := x + k; p >= 0 && p < len(base) {
-				base[p] = ch
+				base[p] = c
 			}
 		}
-		out[y] = string(base)
+		out[y] = junta(base)
 	}
 	return out
 }
@@ -203,21 +208,108 @@ func Tela(largura, altura int) []string {
 // empurraria todo o resto da linha.
 func Compoe(tela []string, bloco []string, x, y int, transparente bool) []string {
 	out := append([]string(nil), tela...)
-	for i, linha := range bloco {
+	for i, l := range bloco {
 		ly := y + i
 		if ly < 0 || ly >= len(out) {
 			continue
 		}
-		base := []rune(out[ly])
-		for k, ch := range []rune(linha) {
-			if transparente && ch == ' ' {
+		base := celulas(out[ly])
+		for k, c := range celulas(l) {
+			// A transparência olha o caractere, não a célula inteira: um
+			// espaço pintado continua sendo espaço, e o que está atrás dele
+			// tem de aparecer igual.
+			if transparente && c.ch == ' ' {
 				continue
 			}
 			if p := x + k; p >= 0 && p < len(base) {
-				base[p] = ch
+				base[p] = c
 			}
 		}
-		out[ly] = string(base)
+		out[ly] = junta(base)
 	}
 	return out
+}
+
+// Pinta aplica um estilo a cada linha de um bloco, de uma vez por linha. Por
+// linha e não por caractere de propósito: um escape por caractere multiplicaria
+// o tamanho do quadro e cortaria qualquer busca por texto na tela.
+func Pinta(e lipgloss.Style, bloco []string) []string {
+	out := make([]string, len(bloco))
+	for i, l := range bloco {
+		out[i] = e.Render(l)
+	}
+	return out
+}
+
+// reset é o escape que desliga toda a marcação.
+const reset = "\x1b[0m"
+
+// celula é um caractere e a marcação que o pinta. Compor em células, e não em
+// runes, é o que mantém o desenho no lugar: os bytes de um escape ANSI não
+// ocupam coluna na tela, mas ocupariam uma posição num []rune e empurrariam
+// todo o resto da linha.
+type celula struct {
+	estilo string
+	ch     rune
+}
+
+// celulas parte uma linha em células de uma coluna cada, carregando em cada
+// uma o estilo que valia ali. Guarda o estado, e não só o escape vizinho: numa
+// linha pintada de ponta a ponta o escape aparece uma vez, no começo, e vale
+// para todos os caracteres até o reset.
+func celulas(s string) []celula {
+	var out []celula
+	estilo := ""
+	r := []rune(s)
+
+	for i := 0; i < len(r); i++ {
+		if r[i] == '\x1b' {
+			fim := fimDoEscape(r, i)
+			if e := string(r[i:fim]); e == reset || e == "\x1b[m" {
+				estilo = ""
+			} else {
+				estilo += e
+			}
+			i = fim - 1
+			continue
+		}
+		out = append(out, celula{estilo: estilo, ch: r[i]})
+	}
+	return out
+}
+
+// fimDoEscape devolve o índice logo depois da sequência que começa em i. Um
+// escape CSI vai até a primeira letra ou símbolo da faixa @ a ~; sem achar o
+// fim, engole o resto da linha, que é melhor do que devolver o escape como se
+// fosse texto para a tela.
+func fimDoEscape(r []rune, i int) int {
+	for j := i + 1; j < len(r); j++ {
+		if r[j] >= '@' && r[j] <= '~' && r[j] != '[' {
+			return j + 1
+		}
+	}
+	return len(r)
+}
+
+// junta remonta a linha, emitindo a marcação só quando ela muda e fechando com
+// um reset se a linha acabar pintada — sem o reset a cor vazaria para o resto
+// da tela.
+func junta(cs []celula) string {
+	var b strings.Builder
+	atual := ""
+
+	for _, c := range cs {
+		if c.estilo != atual {
+			if atual != "" {
+				b.WriteString(reset)
+			}
+			b.WriteString(c.estilo)
+			atual = c.estilo
+		}
+		b.WriteRune(c.ch)
+	}
+	if atual != "" {
+		b.WriteString(reset)
+	}
+	return b.String()
 }

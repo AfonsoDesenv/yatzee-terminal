@@ -101,6 +101,9 @@ func (s Screen) acoes() []string {
 	}
 
 	out := ui.Painel(w, ui.Centraliza(rotulo, w))
+	if s.sel == focoContinuar {
+		out = ui.Pinta(s.theme.BotaoEmFoco, out)
+	}
 	return append(out, ui.Painel(w,
 		ui.Rotulado("moedas", ui.Numero(int64(s.partida.Moedas)), w),
 		ui.Rotulado("runas", fmt.Sprintf("%d/%d", len(s.partida.Runas), regras.MaxRunas), w),
@@ -110,8 +113,8 @@ func (s Screen) acoes() []string {
 // prateleira empilha a vitrine, o retângulo de descrição e os pacotes.
 func (s Screen) prateleira() []string {
 	var cartas [][]string
-	for _, r := range s.vitrine {
-		cartas = append(cartas, carta(r))
+	for i := range s.vitrine {
+		cartas = append(cartas, s.carta(i))
 	}
 
 	out := ui.Painel(larguraVitrine, ui.Centraliza("A VENDA", larguraVitrine), ui.Separador)
@@ -128,19 +131,27 @@ func (s Screen) prateleira() []string {
 	return append(out, pacotes()...)
 }
 
-// carta é uma runa na prateleira. Altura fixa: uma carta vendida que
+// carta é a runa i na prateleira. Altura fixa: uma carta vendida que
 // encolhesse puxaria a prateleira inteira para cima quando alguém comprasse.
-func carta(r regras.Runa) []string {
+func (s Screen) carta(i int) []string {
 	const w = larguraCarta - 2 // o painel acrescenta as duas bordas
+	r := s.vitrine[i]
 
+	var out []string
 	if r.Letra == "" {
-		return ui.Painel(w, ui.Centraliza("-", w), ui.Separador, ui.Centraliza("vendida", w))
+		out = ui.Painel(w, ui.Centraliza("-", w), ui.Separador, ui.Centraliza("vendida", w))
+	} else {
+		out = ui.Painel(w,
+			ui.Centraliza(r.Letra, w),
+			ui.Separador,
+			ui.Centraliza(fmt.Sprintf("%d moedas", PrecoRuna), w),
+		)
 	}
-	return ui.Painel(w,
-		ui.Centraliza(r.Letra, w),
-		ui.Separador,
-		ui.Centraliza(fmt.Sprintf("%d moedas", PrecoRuna), w),
-	)
+
+	if s.sel == focoPrimeiraRuna+i {
+		out = ui.Pinta(s.theme.RunaEmFoco, out)
+	}
+	return out
 }
 
 // marcaDaVitrine aponta a carta em foco com o mesmo traço que marca um dado na
@@ -151,6 +162,7 @@ func (s Screen) marcaDaVitrine() string {
 		marca := strings.Repeat(" ", larguraCarta)
 		if s.sel == focoPrimeiraRuna+i {
 			marca = ui.Centraliza(strings.Repeat("^", larguraCarta-4), larguraCarta)
+			marca = s.theme.RunaEmFoco.Render(marca)
 		}
 		b.WriteString(marca)
 		if i < len(s.vitrine)-1 {
