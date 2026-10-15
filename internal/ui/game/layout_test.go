@@ -44,7 +44,7 @@ func TestOFogoNoPainelNaoMexeNoResto(t *testing.T) {
 		t.Fatalf("o fogo mudou a altura da tela: %d linhas viram %d", len(frio), len(quente))
 	}
 	for i := range frio {
-		if a, b := len([]rune(frio[i])), len([]rune(quente[i])); a != b {
+		if a, b := ui.Largura(frio[i]), ui.Largura(quente[i]); a != b {
 			t.Errorf("linha %d: largura %d sem fogo, %d com fogo", i, a, b)
 		}
 	}
@@ -57,11 +57,13 @@ func TestOFogoNoPainelNaoMexeNoResto(t *testing.T) {
 	}
 }
 
-// coluna acha em que coluna um texto aparece na tela.
+// coluna acha em que coluna da tela um texto aparece. Mede a largura do que
+// vem antes em vez de devolver o indice em bytes: com a chama pintada, os
+// escapes ANSI entrariam na conta como se ocupassem coluna.
 func coluna(tela []string, texto string) int {
 	for _, l := range tela {
 		if i := strings.Index(l, texto); i >= 0 {
-			return i
+			return ui.Largura(l[:i])
 		}
 	}
 	return -1
@@ -74,7 +76,7 @@ func TestAChamaCabeDentroDaMargem(t *testing.T) {
 	tela := strings.Split(s.mesa(118, 31), "\n")
 
 	for i, l := range tela {
-		if n := len([]rune(l)); n != 118 {
+		if n := ui.Largura(l); n != 118 {
 			t.Fatalf("linha %d tem %d colunas, a tela tem 118", i, n)
 		}
 	}

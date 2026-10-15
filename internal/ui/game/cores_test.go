@@ -156,3 +156,69 @@ func TestACorDaLojaNaoMexeNoLayout(t *testing.T) {
 		}
 	}
 }
+
+// A chama sai laranja, no painel e na tela cheia — dois caminhos de desenho
+// diferentes (Compoe num, SobreOpaco no outro), então os dois são checados.
+func TestAChamaSaiPintada(t *testing.T) {
+	s := contando(t, 1)
+	s, _ = aplica(s, tiqueFogo{})
+	if s.chama == nil {
+		t.Fatal("sem chama no painel")
+	}
+
+	if !temCorDeFogo(s, s.View()) {
+		t.Error("a chama do painel saiu sem cor nenhuma")
+	}
+
+	v := New()
+	v.largura, v.altura = 118, 32
+	v = venceAgora(v)
+	v, _ = aplica(v, tiqueFogo{})
+	if !temCorDeFogo(v, v.View()) {
+		t.Error("a chama da tela de vitória saiu sem cor nenhuma")
+	}
+}
+
+// A paleta vai do frio ao quente, e cores diferentes têm de aparecer juntas na
+// mesma chama: uma laranja chapada não teria ponta nem brasa.
+func TestAChamaTemGradiente(t *testing.T) {
+	s := contando(t, 1)
+	for i := 0; i < 16; i++ {
+		s, _ = aplica(s, tiqueFogo{})
+	}
+	tela := s.View()
+
+	var niveis int
+	for _, e := range s.theme.Fogo {
+		if strings.Contains(tela, marca(e)) {
+			niveis++
+		}
+	}
+	if niveis < 3 {
+		t.Errorf("a chama usa só %d níveis da paleta, quero pelo menos 3", niveis)
+	}
+}
+
+// E a cor da chama também não pode mover nada: ela passa por cima do painel.
+func TestACorDaChamaNaoMexeNoLayout(t *testing.T) {
+	s := contando(t, 1)
+	for i := 0; i < 8; i++ {
+		s, _ = aplica(s, tiqueFogo{})
+	}
+
+	for i, l := range strings.Split(s.mesa(118, 31), "\n") {
+		if got := ui.Largura(l); got != 118 {
+			t.Errorf("linha %d mede %d colunas com a chama pintada, a tela tem 118", i, got)
+		}
+	}
+}
+
+// temCorDeFogo diz se algum nível da paleta da chama aparece na tela.
+func temCorDeFogo(s Screen, tela string) bool {
+	for _, e := range s.theme.Fogo {
+		if strings.Contains(tela, marca(e)) {
+			return true
+		}
+	}
+	return false
+}

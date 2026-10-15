@@ -19,6 +19,21 @@ type Theme struct {
 	DadoMarcado lipgloss.Style
 	RunaEmFoco  lipgloss.Style
 	BotaoEmFoco lipgloss.Style
+
+	// Fogo vai da ponta que apaga até a brasa. Cinco níveis para os dez
+	// degraus da rampa de densidade: menos cores significam trechos maiores
+	// e menos escape por quadro, e a chama repinta a tela inteira vinte vezes
+	// por segundo.
+	Fogo []lipgloss.Style
+}
+
+// chama monta a paleta do fogo a partir das cores, do frio para o quente.
+func chama(cores ...string) []lipgloss.Style {
+	out := make([]lipgloss.Style, len(cores))
+	for i, c := range cores {
+		out[i] = lipgloss.NewStyle().Foreground(lipgloss.Color(c))
+	}
+	return out
 }
 
 // NewTheme devolve o tema padrão.
@@ -34,5 +49,13 @@ func NewTheme() Theme {
 		DadoMarcado: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff5555")),
 		RunaEmFoco:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#b58cff")),
 		BotaoEmFoco: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#5af78e")),
+
+		Fogo: chama(
+			"#8c2500", // a ponta esfriando
+			"#d94e00",
+			"#ff7518", // o corpo da chama
+			"#ffa500",
+			"#ffd166", // a brasa, na base
+		),
 	}
 }

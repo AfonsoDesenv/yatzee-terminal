@@ -108,6 +108,12 @@ func (s Screen) Partida() regras.Partida { return s.partida }
 // Pegando diz se há chama acesa agora.
 func (s Screen) Pegando() bool { return s.chama != nil }
 
+// chamaPintada é a chama com a cor do tema. A tradução de calor em cor mora
+// aqui, e não no pacote fogo: ele simula, e continua sem saber o que é cor.
+func (s Screen) chamaPintada() []string {
+	return ui.PintaRampa(s.chama.Linhas(), fogo.Rampa, s.theme.Fogo)
+}
+
 // Title identifica a tela.
 func (s Screen) Title() string { return "jogo" }
 

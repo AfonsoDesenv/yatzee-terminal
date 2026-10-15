@@ -205,7 +205,7 @@ func (s Screen) mesa(largura, altura int) string {
 		// o fogo subir atraves dele em vez de brotar solto embaixo.
 		xFogo := xEsq + (larguraEsquerda+2-larguraFogoPainel)/2
 		yFogo := yTopo + len(esquerdo) - alturaFogoPainel
-		tela = ui.Compoe(tela, s.chama.Linhas(), xFogo, yFogo, false)
+		tela = ui.Compoe(tela, s.chamaPintada(), xFogo, yFogo, false)
 	}
 
 	// O painel da meta entra transparente para o fogo queimar por dentro dele.

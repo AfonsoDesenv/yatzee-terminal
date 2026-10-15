@@ -17,7 +17,7 @@ func (s Screen) telaVitoria(largura, altura int) string {
 	if s.chama == nil {
 		return strings.Join(ui.CentralizaBloco(modal, largura, altura), "\n")
 	}
-	return strings.Join(ui.SobreOpaco(s.chama.Linhas(), modal), "\n")
+	return strings.Join(ui.SobreOpaco(s.chamaPintada(), modal), "\n")
 }
 
 func (s Screen) blocoVitoria() []string {

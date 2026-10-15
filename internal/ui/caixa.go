@@ -241,6 +241,59 @@ func Pinta(e lipgloss.Style, bloco []string) []string {
 	return out
 }
 
+// PintaRampa pinta cada caractere pela posição dele numa rampa de densidade:
+// a rampa já diz quanto calor tem ali, então a cor sai dela. A rampa vem por
+// parâmetro para este pacote não precisar conhecer quem a desenhou.
+//
+// Caracteres vizinhos de mesma cor saem num trecho só. A compressão não é
+// esmero: um escape por caractere multiplicaria por vinte o tamanho de cada
+// quadro de uma chama que cobre a tela inteira.
+func PintaRampa(linhas []string, rampa string, palheta []lipgloss.Style) []string {
+	if len(palheta) == 0 {
+		return linhas
+	}
+
+	out := make([]string, len(linhas))
+	for i, l := range linhas {
+		var b, trecho strings.Builder
+		nivel := -1
+
+		fecha := func() {
+			if trecho.Len() == 0 {
+				return
+			}
+			if nivel < 0 {
+				b.WriteString(trecho.String())
+			} else {
+				b.WriteString(palheta[nivel].Render(trecho.String()))
+			}
+			trecho.Reset()
+		}
+
+		for _, ch := range l {
+			if n := nivelNaRampa(ch, rampa, len(palheta)); n != nivel {
+				fecha()
+				nivel = n
+			}
+			trecho.WriteRune(ch)
+		}
+		fecha()
+		out[i] = b.String()
+	}
+	return out
+}
+
+// nivelNaRampa traduz um caractere da rampa num índice da paleta. Devolve -1
+// para o que não é fogo: o primeiro degrau da rampa é a ausência dele, e fica
+// sem tinta para o fundo da tela continuar aparecendo entre as labaredas.
+func nivelNaRampa(ch rune, rampa string, niveis int) int {
+	p := strings.IndexRune(rampa, ch)
+	if p <= 0 {
+		return -1
+	}
+	return p * niveis / len([]rune(rampa))
+}
+
 // reset é o escape que desliga toda a marcação.
 const reset = "\x1b[0m"
 
