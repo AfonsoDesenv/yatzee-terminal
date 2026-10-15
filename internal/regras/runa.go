@@ -47,17 +47,32 @@ func (r Runa) Descricao() string {
 // runa, ela soma três vezes. Vale para fichas e para multiplicador — é o que
 // faz um yatzee render bem mais que um par com a mesma runa.
 func (r Runa) Aplica(m Mao) (fichas, mult int) {
-	var vezes int
-	for _, d := range m {
+	f, mu := r.PorGatilho()
+	vezes := len(r.Gatilhos(m))
+	return vezes * f, vezes * mu
+}
+
+// Gatilhos são as posições dos dados que fazem a runa somar. Serve à tela, que
+// conta um passo por gatilho e acende o dado de cada um; fatia vazia quer
+// dizer que nenhum dado a dispara.
+func (r Runa) Gatilhos(m Mao) []int {
+	var out []int
+	for i, d := range m {
 		if d == r.valor {
-			vezes++
+			out = append(out, i)
 		}
 	}
+	return out
+}
 
+// PorGatilho é o que a runa soma a cada dado que a dispara. Aplica é isto
+// vezes o número de gatilhos, então a conta da tela, somada passo a passo,
+// fecha com a da pontuação.
+func (r Runa) PorGatilho() (fichas, mult int) {
 	if r.efeito == fichasPorDado {
-		return vezes * FichasPorDadoDaRuna, 0
+		return FichasPorDadoDaRuna, 0
 	}
-	return 0, vezes * MultDaRuna
+	return 0, MultDaRuna
 }
 
 // Dispara diz se a runa tem efeito nesta mão. Serve à tela: uma runa que não

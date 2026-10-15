@@ -171,9 +171,15 @@ func TestAsRunasEntramDepoisDosDados(t *testing.T) {
 	s.partida.Runas = []regras.Runa{c, l, a}
 	s, _ = tecla(s, "enter")
 
-	// A runa inerte não vira passo: combinação + 5 dados + 2 runas.
-	if got := len(s.anim.passos); got != 8 {
-		t.Errorf("a contagem tem %d passos, quero 8 (a runa sem efeito não entra)", got)
+	// A runa inerte não vira passo. As que disparam contam um passo por dado:
+	// combinação + 5 dados + C nos três 3 + L nos dois 6.
+	if got := len(s.anim.passos); got != 1+5+3+2 {
+		t.Errorf("a contagem tem %d passos, quero %d (a runa sem efeito não entra)", got, 1+5+3+2)
+	}
+	for _, p := range s.anim.passos {
+		if strings.Contains(p.rotulo, "runa A") {
+			t.Error("a runa A entrou na contagem sem disparar")
+		}
 	}
 
 	s = contaTudo(s)

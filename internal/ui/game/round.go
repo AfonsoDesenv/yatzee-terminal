@@ -10,28 +10,24 @@ import (
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
 )
 
-// origem diz quem causou um passo da contagem. A tela usa isso para acender o
-// item que está somando agora, em vez de só escrever o nome dele no painel.
-type origem int
-
-const (
-	origemCombinacao origem = iota
-	origemDado
-	origemRuna
-)
-
 // passo é uma etapa da contagem. Fichas e mult são ambos somados: a combinação
 // entra primeiro e define a base, e tudo depois acrescenta por cima.
 type passo struct {
 	rotulo string
 	fichas int
 	mult   int
-	// de e indice apontam quem causou o passo: o dado ou a runa naquela
-	// posição. O índice é o lugar na mesa e no painel, não a ordem do passo,
-	// porque é o item na tela que tem de acender.
-	de     origem
-	indice int
+	// dado e runa são as posições que o passo acende na tela, ou -1 para
+	// nenhuma. Os dois juntos quando uma runa soma por causa de um dado: a
+	// runa que somou e o dado que a fez somar acendem no mesmo tique.
+	//
+	// São posições na mesa e no painel, não a ordem do passo, porque é o item
+	// na tela que tem de acender.
+	dado int
+	runa int
 }
+
+// semItem é o passo que não aponta nada na tela, como o da combinação.
+const semItem = -1
 
 // animacao percorre os passos de uma jogada.
 type animacao struct {
@@ -51,31 +47,56 @@ type animacao struct {
 // passo e a travessia só acontecia no fim.
 func novaAnimacao(p regras.Pontuacao, dados regras.Mao, runas []regras.Runa) animacao {
 	base, mult := p.Combinacao.Base()
-	ps := []passo{{rotulo: p.Combinacao.Nome(), fichas: base, mult: mult}}
+	ps := []passo{{
+		rotulo: p.Combinacao.Nome(),
+		fichas: base,
+		mult:   mult,
+		dado:   semItem,
+		runa:   semItem,
+	}}
 
 	for i, d := range dados {
 		ps = append(ps, passo{
 			rotulo: fmt.Sprintf("dado %d", d),
 			fichas: d,
-			de:     origemDado,
-			indice: i,
+			dado:   i,
+			runa:   semItem,
 		})
 	}
-	// Cada runa que dispara vira um passo seu, separado dos dados: é o que
-	// deixa ver o que ela acrescentou, em vez de a diferença aparecer
-	// embutida no total.
+
+	// Cada runa vira um passo por dado que a dispara, e não um passo só com a
+	// soma de todos. Com três dados de 6, a runa L soma +2 três vezes, e cada
+	// tique mostra qual dado pagou aquele +2 — somado de uma vez, o salto
+	// aparecia sem dizer de onde veio.
 	for i, r := range runas {
 		if !r.Dispara(dados) {
 			continue
 		}
-		f, m := r.Aplica(dados)
-		ps = append(ps, passo{
-			rotulo: "runa " + r.Letra,
-			fichas: f,
-			mult:   m,
-			de:     origemRuna,
-			indice: i,
-		})
+
+		gatilhos := r.Gatilhos(dados)
+		if len(gatilhos) == 0 {
+			// Runa que soma sem depender de dado: um passo, nenhum dado aceso.
+			f, m := r.Aplica(dados)
+			ps = append(ps, passo{
+				rotulo: "runa " + r.Letra,
+				fichas: f,
+				mult:   m,
+				dado:   semItem,
+				runa:   i,
+			})
+			continue
+		}
+
+		f, m := r.PorGatilho()
+		for _, d := range gatilhos {
+			ps = append(ps, passo{
+				rotulo: fmt.Sprintf("runa %s dado %d", r.Letra, dados[d]),
+				fichas: f,
+				mult:   m,
+				dado:   d,
+				runa:   i,
+			})
+		}
 	}
 	return animacao{passos: ps}
 }
@@ -93,15 +114,15 @@ func (a animacao) avanca() animacao {
 	return a
 }
 
-// causa devolve quem causou o passo que acabou de entrar. É esse item que a
-// tela acende, e ele fica aceso até o próximo tique trocar o passo — o que dá
-// exatamente a duração de um tique.
-func (a animacao) causa() (origem, int) {
+// causa devolve o dado e a runa que o passo recém-entrado acende, ou semItem
+// para cada um que ele não aponta. Ficam acesos até o próximo tique trocar o
+// passo — o que dá exatamente a duração de um tique.
+func (a animacao) causa() (dado, runa int) {
 	if a.atual <= 0 || a.atual > len(a.passos) {
-		return origemCombinacao, -1
+		return semItem, semItem
 	}
 	p := a.passos[a.atual-1]
-	return p.de, p.indice
+	return p.dado, p.runa
 }
 
 func (a animacao) rotulo(padrao string) string {
@@ -142,7 +163,7 @@ func (s Screen) painelEsquerdo() []string {
 // somando no tique acende de roxo — sem isso o passo dela passava batido, com
 // o nome aparecendo no painel da esquerda e nada apontando qual era.
 func (s Screen) painelRunas(largura int) []string {
-	de, aceso := s.acesa()
+	_, aceso := s.acende()
 
 	var caixas [][]string
 	for i := 0; i < regras.MaxRunas; i++ {
@@ -151,7 +172,7 @@ func (s Screen) painelRunas(largura int) []string {
 			letra = s.partida.Runas[i].Letra
 		}
 		caixa := []string{".---.", "| " + letra + " |", "'---'"}
-		if de == origemRuna && i == aceso {
+		if i == aceso {
 			caixa = ui.Pinta(s.theme.Runa, caixa)
 		}
 		caixas = append(caixas, caixa)
@@ -196,9 +217,9 @@ func (s Screen) mesa(largura, altura int) string {
 	// Quem está somando no tique ganha o azul, e ele vence o vermelho: no meio
 	// da contagem o reroll já não vai acontecer, e o que importa ver é de onde
 	// vieram os pontos que acabaram de entrar.
-	de, aceso := s.acesa()
+	aceso, _ := s.acende()
 	corDo := func(i int) (lipgloss.Style, bool) {
-		if de == origemDado && i == aceso {
+		if i == aceso {
 			return s.theme.DadoContando, true
 		}
 		if s.partida.Marcados[i] {

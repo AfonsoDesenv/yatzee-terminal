@@ -125,11 +125,11 @@ func (s Screen) Partida() regras.Partida { return s.partida }
 // Pegando diz se há chama acesa agora.
 func (s Screen) Pegando() bool { return s.chama != nil }
 
-// acesa diz qual item está contando agora, para a tela acender só ele. Fora
-// da contagem nada acende, e o índice -1 nunca casa com item nenhum.
-func (s Screen) acesa() (origem, int) {
+// acende diz qual dado e qual runa estão acesos agora. Fora da contagem nada
+// acende, e semItem nunca casa com posição nenhuma.
+func (s Screen) acende() (dado, runa int) {
 	if s.phase != PhaseContando {
-		return origemCombinacao, -1
+		return semItem, semItem
 	}
 	return s.anim.causa()
 }
