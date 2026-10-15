@@ -163,7 +163,7 @@ func TestAContagemComecaPelaCombinacao(t *testing.T) {
 // As runas disparam depois dos dados, e só as que têm efeito viram passo.
 func TestAsRunasEntramDepoisDosDados(t *testing.T) {
 	c, _ := regras.RunaPorLetra("C") // cada dado 3: +10 fichas
-	l, _ := regras.RunaPorLetra("L") // tem um 6: +2 mult
+	l, _ := regras.RunaPorLetra("L") // cada dado 6: +2 mult
 	a, _ := regras.RunaPorLetra("A") // cada dado 1: não dispara aqui
 
 	s := New()
@@ -177,7 +177,9 @@ func TestAsRunasEntramDepoisDosDados(t *testing.T) {
 	}
 
 	s = contaTudo(s)
-	if quero := (5 + 21 + 30) * (5 + 2); s.Partida().Pontos != int64(quero) {
+	// Full house (5 base, 5 mult) + 21 dos dados; C soma 10 por dado 3 (tres)
+	// e L soma 2 por dado 6 (dois).
+	if quero := (5 + 21 + 3*10) * (5 + 2*2); s.Partida().Pontos != int64(quero) {
 		t.Errorf("pontos = %d, quero %d", s.Partida().Pontos, quero)
 	}
 }

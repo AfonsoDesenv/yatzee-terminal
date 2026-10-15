@@ -1,6 +1,9 @@
 package regras
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func runa(t *testing.T, letra string) Runa {
 	t.Helper()
@@ -46,17 +49,20 @@ func TestRunasDeFichasSomamPorDado(t *testing.T) {
 	}
 }
 
-// G..L somam ao multiplicador uma única vez, mesmo com vários dados do valor.
-func TestRunasDeMultSomamUmaVezSo(t *testing.T) {
+// G..L somam ao multiplicador uma vez por dado com o valor, igual às de
+// fichas: três dados com o valor somam três vezes.
+func TestRunasDeMultSomamPorDado(t *testing.T) {
 	casos := []struct {
 		letra string
 		mao   Mao
 		mult  int
 	}{
 		{"G", Mao{1, 2, 3, 4, 5}, MultDaRuna},
-		{"G", Mao{1, 1, 1, 1, 1}, MultDaRuna}, // cinco dados, ainda uma vez
+		{"G", Mao{1, 1, 4, 5, 6}, 2 * MultDaRuna}, // dois dados, duas vezes
+		{"G", Mao{1, 1, 1, 1, 1}, 5 * MultDaRuna}, // yatzee de um: cinco vezes
 		{"G", Mao{2, 3, 4, 5, 6}, 0},
 		{"L", Mao{6, 1, 2, 3, 4}, MultDaRuna},
+		{"L", Mao{6, 6, 6, 3, 3}, 3 * MultDaRuna}, // três 6 somam +6 ao mult
 		{"J", Mao{1, 2, 3, 5, 6}, 0},
 	}
 	for _, c := range casos {
@@ -105,15 +111,15 @@ func TestAvaliaComRunas(t *testing.T) {
 		t.Errorf("com a runa C = %d, quero %d", comC.Total(), quero)
 	}
 
-	// L soma 2 ao mult por ter um 6.
+	// L soma 2 ao mult por dado 6: dois dados, +4 de mult.
 	comL := AvaliaCom(m, []Runa{runa(t, "L")})
-	if quero := (5 + 21) * (5 + 2); comL.Total() != quero {
+	if quero := (5 + 21) * (5 + 2*2); comL.Total() != quero {
 		t.Errorf("com a runa L = %d, quero %d", comL.Total(), quero)
 	}
 
 	// Juntas: as fichas somam e o mult soma, nunca multiplicam entre si.
 	comAmbas := AvaliaCom(m, []Runa{runa(t, "C"), runa(t, "L")})
-	if quero := (5 + 21 + 30) * (5 + 2); comAmbas.Total() != quero {
+	if quero := (5 + 21 + 3*10) * (5 + 2*2); comAmbas.Total() != quero {
 		t.Errorf("com C e L = %d, quero %d", comAmbas.Total(), quero)
 	}
 }
@@ -125,5 +131,53 @@ func TestRunaQueNaoDisparaNaoMudaAPontuacao(t *testing.T) {
 	com := AvaliaCom(m, []Runa{runa(t, "A")}).Total() // nenhum dado 1
 	if sem != com {
 		t.Errorf("runa inerte mudou a pontuação: %d viva %d", sem, com)
+	}
+}
+
+// A regra, no exemplo que a definiu: "cada 6 é +2 no multiplicador" significa
+// que três dados com 6 somam +6, não +2. As duas famílias contam por dado.
+func TestCadaDadoContaUmaVez(t *testing.T) {
+	tresSeis := Mao{6, 6, 6, 1, 2}
+
+	if _, mult := runa(t, "L").Aplica(tresSeis); mult != 6 {
+		t.Errorf("tres dados com 6 somaram %d ao mult, quero 6 (2 por dado)", mult)
+	}
+	if fichas, _ := runa(t, "F").Aplica(tresSeis); fichas != 30 {
+		t.Errorf("tres dados com 6 somaram %d fichas, quero 30 (10 por dado)", fichas)
+	}
+
+	// E a conta fechada: trinca de 6 é base 5 x 4, mais 21 dos dados.
+	if quero := (5 + 21) * (4 + 3*MultDaRuna); AvaliaCom(tresSeis, []Runa{runa(t, "L")}).Total() != quero {
+		t.Errorf("trinca de 6 com a runa L = %d, quero %d",
+			AvaliaCom(tresSeis, []Runa{runa(t, "L")}).Total(), quero)
+	}
+
+	// Um dado a mais do valor é um efeito a mais, sempre.
+	for n := 1; n <= 5; n++ {
+		m := Mao{}
+		for i := 0; i < n; i++ {
+			m[i] = 6
+		}
+		for i := n; i < len(m); i++ {
+			m[i] = 1
+		}
+		_, mult := runa(t, "L").Aplica(m)
+		if quero := n * MultDaRuna; mult != quero {
+			t.Errorf("%d dados com 6 somaram %d ao mult, quero %d", n, mult, quero)
+		}
+		fichas, _ := runa(t, "F").Aplica(m)
+		if quero := n * FichasPorDadoDaRuna; fichas != quero {
+			t.Errorf("%d dados com 6 somaram %d fichas, quero %d", n, fichas, quero)
+		}
+	}
+}
+
+// A descrição tem de dizer "cada", não "tem um": a loja é onde a pessoa
+// decide a compra, e a diferença entre os dois muda o valor da runa.
+func TestADescricaoDizCadaDado(t *testing.T) {
+	for _, r := range Catalogo {
+		if got := r.Descricao(); !strings.HasPrefix(got, "cada dado ") {
+			t.Errorf("runa %s descreve-se como %q, quero começar com \"cada dado\"", r.Letra, got)
+		}
 	}
 }

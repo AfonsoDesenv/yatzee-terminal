@@ -11,8 +11,9 @@ type efeito int
 const (
 	// fichasPorDado soma fichas uma vez por dado com o valor da runa.
 	fichasPorDado efeito = iota
-	// multSeTiver soma ao multiplicador se houver ao menos um dado com o valor.
-	multSeTiver
+	// multPorDado soma ao multiplicador uma vez por dado com o valor da runa.
+	// Conta por dado, não por mão: três dados com o valor somam três vezes.
+	multPorDado
 )
 
 // Valores que as runas básicas somam.
@@ -35,27 +36,28 @@ func (r Runa) Descricao() string {
 	if r.efeito == fichasPorDado {
 		return fmt.Sprintf("cada dado %d: +%d fichas", r.valor, FichasPorDadoDaRuna)
 	}
-	return fmt.Sprintf("tem um dado %d: +%d mult", r.valor, MultDaRuna)
+	return fmt.Sprintf("cada dado %d: +%d mult", r.valor, MultDaRuna)
 }
 
 // Aplica devolve o que a runa acrescenta a esta mão. Fichas e multiplicador
 // são somados, nunca multiplicados: é o que mantém a conta previsível quando
 // várias runas disparam juntas.
+//
+// As duas famílias contam por dado, e não por mão: com três dados do valor da
+// runa, ela soma três vezes. Vale para fichas e para multiplicador — é o que
+// faz um yatzee render bem mais que um par com a mesma runa.
 func (r Runa) Aplica(m Mao) (fichas, mult int) {
-	if r.efeito == fichasPorDado {
-		for _, d := range m {
-			if d == r.valor {
-				fichas += FichasPorDadoDaRuna
-			}
-		}
-		return fichas, 0
-	}
+	var vezes int
 	for _, d := range m {
 		if d == r.valor {
-			return 0, MultDaRuna
+			vezes++
 		}
 	}
-	return 0, 0
+
+	if r.efeito == fichasPorDado {
+		return vezes * FichasPorDadoDaRuna, 0
+	}
+	return 0, vezes * MultDaRuna
 }
 
 // Dispara diz se a runa tem efeito nesta mão. Serve à tela: uma runa que não
@@ -77,7 +79,7 @@ func montaCatalogo() []Runa {
 	}
 	letras = "GHIJKL"
 	for i := 0; i < 6; i++ {
-		out = append(out, Runa{Letra: string(letras[i]), efeito: multSeTiver, valor: i + 1})
+		out = append(out, Runa{Letra: string(letras[i]), efeito: multPorDado, valor: i + 1})
 	}
 	return out
 }
