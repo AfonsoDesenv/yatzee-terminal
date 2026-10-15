@@ -29,6 +29,7 @@ func New() Screen {
 	return Screen{
 		items: []item{
 			{label: "NOVO JOGO", intent: ui.StartGame},
+			{label: "DESAFIO", intent: ui.OpenChallenges},
 			{label: "SAIR", intent: ui.Quit},
 		},
 		largura: ui.DefaultWidth,

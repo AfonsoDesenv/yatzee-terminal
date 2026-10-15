@@ -32,22 +32,45 @@ type Partida struct {
 
 	// Runas em jogo, na ordem em que disparam.
 	Runas []Runa
+
+	// faces são os valores que um dado pode cair. Vazia quer dizer de 1 a 6;
+	// quem estreita é um desafio, e a restrição acompanha a partida inteira
+	// em vez de valer só na primeira mão.
+	faces []int
 }
 
 // NovaPartida começa no primeiro nível, com os dados já rolados.
-func NovaPartida(rnd *rand.Rand) Partida {
-	p := Partida{
+func NovaPartida(rnd *rand.Rand) Partida { return base().rolaTodos(rnd) }
+
+// NovaPartidaDesafio começa uma partida com as condições de um desafio. Os
+// ajustes entram antes da primeira rolagem: um desafio que estreita os dados
+// tem de valer já na mão com que a partida abre.
+func NovaPartidaDesafio(d Desafio, rnd *rand.Rand) Partida {
+	return d.Aplica(base()).rolaTodos(rnd)
+}
+
+// base é a partida do primeiro nível, ainda sem dados. Separada da rolagem
+// para o desafio poder entrar no meio.
+func base() Partida {
+	return Partida{
 		Nivel:   1,
 		Alvo:    AlvoInicial,
 		Maos:    MaosPorRodada,
 		Rerolls: RerollsPorRodada,
 	}
-	return p.rolaTodos(rnd)
+}
+
+// rola sorteia um dado entre as faces permitidas.
+func (p Partida) rola(rnd *rand.Rand) int {
+	if len(p.faces) == 0 {
+		return rnd.IntN(6) + 1
+	}
+	return p.faces[rnd.IntN(len(p.faces))]
 }
 
 func (p Partida) rolaTodos(rnd *rand.Rand) Partida {
 	for i := range p.Dados {
-		p.Dados[i] = rnd.IntN(6) + 1
+		p.Dados[i] = p.rola(rnd)
 	}
 	p.Marcados = [DadosPorMao]bool{}
 	return p
@@ -86,7 +109,7 @@ func (p Partida) Rerola(rnd *rand.Rand) Partida {
 	}
 	for i, marcado := range p.Marcados {
 		if marcado {
-			p.Dados[i] = rnd.IntN(6) + 1
+			p.Dados[i] = p.rola(rnd)
 		}
 	}
 	p.Marcados = [DadosPorMao]bool{}

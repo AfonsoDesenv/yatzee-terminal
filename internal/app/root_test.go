@@ -6,7 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/afonsodesenv/yatzee-terminal/internal/regras"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
+	"github.com/afonsodesenv/yatzee-terminal/internal/ui/game"
 )
 
 // telaFake é uma tela de teste: devolve sempre os mesmos comandos, para o
@@ -235,5 +237,79 @@ func TestTelaEmpilhadaJaNasceComOTamanhoDaTela(t *testing.T) {
 	if topo.w != w-2 || topo.h != h-2 {
 		t.Errorf("a tela nova nasceu com %dx%d, quero %dx%d (a tela menos a moldura)",
 			topo.w, topo.h, w-2, h-2)
+	}
+}
+
+// O menu pede a lista de desafios, e ela entra na pilha por cima do menu.
+func TestDesafioAbreALista(t *testing.T) {
+	m := NewRoot(telaFake{nome: "menu"})
+	m = passo(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = passo(m, ui.OpenChallengesMsg{})
+
+	if m.Depth() != 2 {
+		t.Fatalf("pilha com %d telas, quero 2 (menu e desafios)", m.Depth())
+	}
+	if got := m.Top().Title(); got != "desafios" {
+		t.Errorf("tela do topo = %q, quero \"desafios\"", got)
+	}
+}
+
+// Escolher um desafio troca a lista pela partida, em vez de empilhar por cima:
+// voltar de dentro do jogo leva ao menu, igual a uma partida normal.
+func TestEscolherODesafioTrocaAListaPelaPartida(t *testing.T) {
+	m := NewRoot(telaFake{nome: "menu"})
+	m = passo(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = passo(m, ui.OpenChallengesMsg{})
+	m = passo(m, ui.StartChallengeMsg{Desafio: 0})
+
+	if m.Depth() != 2 {
+		t.Fatalf("pilha com %d telas, quero 2 (menu e jogo)", m.Depth())
+	}
+	if got := m.Top().Title(); got != "jogo" {
+		t.Fatalf("tela do topo = %q, quero \"jogo\"", got)
+	}
+
+	// E voltar leva ao menu, nao a lista.
+	m = passo(m, ui.BackMsg{})
+	if got := m.Top().Title(); got != "menu" {
+		t.Errorf("voltar levou a %q, quero \"menu\"", got)
+	}
+}
+
+// A partida do desafio comeca com as condicoes dele, nao com as padrao.
+func TestAPartidaDoDesafioComecaComAsCondicoes(t *testing.T) {
+	for i, d := range regras.Desafios {
+		m := NewRoot(telaFake{nome: "menu"})
+		m = passo(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = passo(m, ui.StartChallengeMsg{Desafio: i})
+
+		jogo, ok := m.Top().(game.Screen)
+		if !ok {
+			t.Fatalf("desafio %q: topo = %T, quero game.Screen", d.Nome, m.Top())
+		}
+		esperada := d.Aplica(regras.Partida{})
+		p := jogo.Partida()
+
+		if p.Moedas != esperada.Moedas {
+			t.Errorf("%s: moedas = %d, quero %d", d.Nome, p.Moedas, esperada.Moedas)
+		}
+		if len(p.Runas) != len(esperada.Runas) {
+			t.Errorf("%s: %d runas, quero %d", d.Nome, len(p.Runas), len(esperada.Runas))
+		}
+	}
+}
+
+// Indice fora do catalogo nao faz nada: a mensagem pode chegar de qualquer
+// tela, e derrubar o jogo por um indice ruim seria pior que ignorar.
+func TestDesafioForaDoCatalogoNaoFazNada(t *testing.T) {
+	m := NewRoot(telaFake{nome: "menu"})
+	m = passo(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	for _, i := range []int{-1, len(regras.Desafios), 999} {
+		antes := m.Depth()
+		m = passo(m, ui.StartChallengeMsg{Desafio: i})
+		if m.Depth() != antes {
+			t.Errorf("o indice %d mexeu na pilha: %d para %d", i, antes, m.Depth())
+		}
 	}
 }

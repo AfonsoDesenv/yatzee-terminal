@@ -39,9 +39,19 @@ func TestCursorAndaEParaNasPontas(t *testing.T) {
 		t.Errorf("cursor após down = %d, quero 1", s.Cursor())
 	}
 
+	// Desce até o fim pela tabela, e não por um número fixo: item novo no
+	// menu não deve quebrar o teste do limite.
+	fim := len(s.items) - 1
+	for s.Cursor() < fim {
+		s, _ = tecla(s, "down")
+	}
 	s, _ = tecla(s, "j")
-	if s.Cursor() != 1 {
-		t.Errorf("cursor após j no fim = %d, quero 1 (não deve passar do limite)", s.Cursor())
+	if s.Cursor() != fim {
+		t.Errorf("cursor após j no fim = %d, quero %d (não deve passar do limite)", s.Cursor(), fim)
+	}
+
+	for s.Cursor() > 1 {
+		s, _ = tecla(s, "up")
 	}
 
 	// "up" literal tem que mover de verdade antes de o teste do limite
@@ -64,7 +74,8 @@ func TestEnterEmiteAIntencaoDoItemSelecionado(t *testing.T) {
 		quero    tea.Msg
 	}{
 		{0, ui.StartGameMsg{}},
-		{1, ui.QuitMsg{}},
+		{1, ui.OpenChallengesMsg{}},
+		{2, ui.QuitMsg{}},
 	}
 	for _, c := range casos {
 		s := New()

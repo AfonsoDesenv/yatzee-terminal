@@ -85,7 +85,19 @@ type Screen struct {
 }
 
 // New começa uma partida nova no primeiro nível.
-func New() Screen {
+func New() Screen { return nova(regras.NovaPartida) }
+
+// NovoDesafio começa uma partida com as condições de um desafio.
+func NovoDesafio(d regras.Desafio) Screen {
+	return nova(func(rnd *rand.Rand) regras.Partida {
+		return regras.NovaPartidaDesafio(d, rnd)
+	})
+}
+
+// nova monta a tela em volta de uma partida qualquer. O gerador nasce aqui e
+// é passado a quem começa a partida, para a partida normal e o desafio
+// dividirem o mesmo caminho.
+func nova(comeca func(*rand.Rand) regras.Partida) Screen {
 	var semente [16]byte
 	_, _ = crand.Read(semente[:])
 	rnd := rand.New(rand.NewPCG(
@@ -95,7 +107,7 @@ func New() Screen {
 
 	return Screen{
 		phase:   PhaseRodada,
-		partida: regras.NovaPartida(rnd),
+		partida: comeca(rnd),
 		rnd:     rnd,
 		largura: ui.DefaultWidth,
 		altura:  ui.DefaultHeight,

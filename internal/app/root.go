@@ -4,7 +4,9 @@ package app
 import (
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/afonsodesenv/yatzee-terminal/internal/regras"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
+	"github.com/afonsodesenv/yatzee-terminal/internal/ui/desafio"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui/game"
 )
 
@@ -75,6 +77,17 @@ func (m Root) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.StartGameMsg:
 		return m.pushWith(game.New())
 
+	case ui.OpenChallengesMsg:
+		return m.pushWith(desafio.New())
+
+	case ui.StartChallengeMsg:
+		// A lista sai da pilha no lugar de ficar debaixo da partida: voltar
+		// de dentro do jogo leva ao menu, igual a uma partida normal.
+		if msg.Desafio < 0 || msg.Desafio >= len(regras.Desafios) {
+			return m, nil
+		}
+		return m.replaceWith(game.NovoDesafio(regras.Desafios[msg.Desafio]))
+
 	case ui.BackMsg:
 		return m.pop(), nil
 	}
@@ -133,6 +146,10 @@ func (m Root) pop() Root {
 // WindowSizeMsg quando o programa começa e quando a janela muda. Uma tela
 // empilhada no meio da partida nunca viu nenhum dos dois e desenharia com o
 // tamanho padrão até a pessoa redimensionar o terminal.
+func (m Root) replaceWith(s ui.Screen) (Root, tea.Cmd) {
+	return m.pop().pushWith(s)
+}
+
 func (m Root) pushWith(s ui.Screen) (Root, tea.Cmd) {
 	s, cmdTamanho := dimensiona(s, m.width-2, m.height-2)
 	m = m.push(s)
