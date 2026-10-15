@@ -52,6 +52,11 @@ type (
 	tiqueFogo      struct{}
 	abreVitoria    struct{}
 	apagaFogo      struct{}
+	// fechaContagem encerra a contagem um tique depois do último passo. Sem
+	// essa espera o último passo não teria duração nenhuma: a tela trocaria
+	// de fase no mesmo instante em que ele entrou, e como as runas contam no
+	// fim, a runa nunca chegaria a acender.
+	fechaContagem struct{}
 )
 
 // Screen é a partida inteira: uma máquina de estados sobre uma regras.Partida.
@@ -108,6 +113,15 @@ func (s Screen) Partida() regras.Partida { return s.partida }
 // Pegando diz se há chama acesa agora.
 func (s Screen) Pegando() bool { return s.chama != nil }
 
+// acesa diz qual item está contando agora, para a tela acender só ele. Fora
+// da contagem nada acende, e o índice -1 nunca casa com item nenhum.
+func (s Screen) acesa() (origem, int) {
+	if s.phase != PhaseContando {
+		return origemCombinacao, -1
+	}
+	return s.anim.causa()
+}
+
 // chamaPintada é a chama com a cor do tema. A tradução de calor em cor mora
 // aqui, e não no pacote fogo: ele simula, e continua sem saber o que é cor.
 func (s Screen) chamaPintada() []string {
@@ -131,6 +145,9 @@ func (s Screen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 
 	case tiquePontuacao:
 		return s.avanca()
+
+	case fechaContagem:
+		return s.fecha()
 
 	case abreVitoria:
 		if s.phase != PhaseContando {
@@ -262,7 +279,9 @@ func (s Screen) cruzouAMeta() bool { return s.parcial() >= s.partida.Alvo }
 
 // avanca aplica um passo da contagem e decide o que vem depois dela.
 func (s Screen) avanca() (ui.Screen, tea.Cmd) {
-	if s.phase != PhaseContando {
+	// Tique que chega com a contagem já no fim não faz nada: quem encerra é
+	// fechaContagem, e repetir a resolução aqui marcaria mão duas vezes.
+	if s.phase != PhaseContando || s.anim.acabou() {
 		return s, nil
 	}
 	s.anim = s.anim.avanca()
@@ -279,24 +298,36 @@ func (s Screen) avanca() (ui.Screen, tea.Cmd) {
 		return s, tea.Batch(cmds...)
 	}
 
-	switch {
-	case s.partida.Venceu():
-		// Continua em PhaseContando com o painel em chamas: a vitoria abre
-		// depois, para o fogo no painel ter duracao visivel.
+	// Acabaram os passos. A fase continua em PhaseContando até fechar, para o
+	// último passo ficar aceso pelo tempo dele como todos os outros.
+	if s.partida.Venceu() {
+		// O painel em chamas já segura a tela: a vitória abre depois, e nesse
+		// meio-tempo o último passo continua aceso.
 		if s.chama == nil {
 			s.chama = fogo.Novo(larguraFogoPainel, alturaFogoPainel, s.rnd)
 			cmds = append(cmds, tique(QuadroFogo, tiqueFogo{}))
 		}
-		cmds = append(cmds, tique(FogoNoPainel, abreVitoria{}))
-	case s.partida.Perdeu():
-		s.phase = PhaseDerrota
-		s.chama = nil
-	default:
-		s.partida = s.partida.ProximaMao(s.rnd)
-		s.phase = PhaseRodada
-		s.chama = nil
+		return s, tea.Batch(append(cmds, tique(FogoNoPainel, abreVitoria{}))...)
 	}
-	return s, tea.Batch(cmds...)
+	return s, tea.Batch(append(cmds, tique(PassoPontuacao, fechaContagem{}))...)
+}
+
+// fecha sai da contagem: derrota se acabaram as mãos, senão a mão seguinte.
+// Partida ganha não passa por aqui — quem conduz é abreVitoria, e fechar
+// adiantado pularia a vitória inteira.
+func (s Screen) fecha() (ui.Screen, tea.Cmd) {
+	if s.phase != PhaseContando || s.partida.Venceu() {
+		return s, nil
+	}
+	s.chama = nil
+
+	if s.partida.Perdeu() {
+		s.phase = PhaseDerrota
+		return s, nil
+	}
+	s.partida = s.partida.ProximaMao(s.rnd)
+	s.phase = PhaseRodada
+	return s, nil
 }
 
 const (

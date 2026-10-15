@@ -33,10 +33,15 @@ func tecla(s Screen, k string) (Screen, tea.Cmd) {
 	return aplica(s, tea.KeyPressMsg{Code: rune(k[0]), Text: k})
 }
 
-// contaTudo roda todos os tiques da contagem até ela acabar.
+// contaTudo roda todos os tiques da contagem, inclusive o que a fecha. A
+// contagem só sai de PhaseContando no fecho: o último passo fica aceso pelo
+// tempo dele, como todos os outros.
 func contaTudo(s Screen) Screen {
-	for i := 0; i < 30 && s.Phase() == PhaseContando; i++ {
+	for i := 0; i < 30 && s.Phase() == PhaseContando && !s.anim.acabou(); i++ {
 		s, _ = aplica(s, tiquePontuacao{})
+	}
+	if s.Phase() == PhaseContando {
+		s, _ = aplica(s, fechaContagem{})
 	}
 	return s
 }

@@ -94,7 +94,7 @@ func TestACorDoDadoNaoMexeNoLayout(t *testing.T) {
 // item: se as duas aparecessem juntas, o foco não diria onde está.
 func TestAsCoresDaLojaSeguemOFoco(t *testing.T) {
 	s := naLoja(t, 50)
-	roxo := marca(s.theme.RunaEmFoco)
+	roxo := marca(s.theme.Runa)
 	verde := marca(s.theme.BotaoEmFoco)
 
 	s.sel = focoPrimeiraRuna
@@ -119,7 +119,7 @@ func TestAsCoresDaLojaSeguemOFoco(t *testing.T) {
 // Uma runa só de cada vez: duas pintadas deixariam a escolha ambígua.
 func TestSoUmaRunaFicaRoxa(t *testing.T) {
 	s := naLoja(t, 50)
-	roxo := marca(s.theme.RunaEmFoco)
+	roxo := marca(s.theme.Runa)
 
 	for i := range s.vitrine {
 		s.sel = focoPrimeiraRuna + i

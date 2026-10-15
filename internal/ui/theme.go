@@ -13,11 +13,18 @@ type Theme struct {
 	Error    lipgloss.Style
 	Panel    lipgloss.Style
 
-	// As cores de escolha. Cada uma acompanha um sinal feito de caractere
+	// As cores de estado. Cada uma acompanha um sinal feito de caractere
 	// (^^^^, >  <), e não substitui ele: negrito e cor são um pedido ao
 	// terminal, e onde o pedido é ignorado o desenho tem de se explicar só.
-	DadoMarcado lipgloss.Style
-	RunaEmFoco  lipgloss.Style
+	//
+	// DadoMarcado é o dado escolhido para o reroll; DadoContando é o que está
+	// somando agora. São estados diferentes e pedem cores diferentes, porque
+	// vermelho já quer dizer "vai ser descartado".
+	DadoMarcado  lipgloss.Style
+	DadoContando lipgloss.Style
+	// Runa é o roxo da runa, e serve ao foco na loja e à runa que está somando
+	// na mesa: roxo quer dizer runa, nos dois lugares.
+	Runa        lipgloss.Style
 	BotaoEmFoco lipgloss.Style
 
 	// Fogo vai da ponta que apaga até a brasa. Cinco níveis para os dez
@@ -46,9 +53,10 @@ func NewTheme() Theme {
 		Error:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff6b6b")),
 		Panel:    lipgloss.NewStyle().Padding(1, 2),
 
-		DadoMarcado: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff5555")),
-		RunaEmFoco:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#b58cff")),
-		BotaoEmFoco: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#5af78e")),
+		DadoMarcado:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#ff5555")),
+		DadoContando: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#4fc3f7")),
+		Runa:         lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#b58cff")),
+		BotaoEmFoco:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#5af78e")),
 
 		Fogo: chama(
 			"#8c2500", // a ponta esfriando

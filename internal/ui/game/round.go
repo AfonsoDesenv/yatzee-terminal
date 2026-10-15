@@ -4,8 +4,20 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/afonsodesenv/yatzee-terminal/internal/regras"
 	"github.com/afonsodesenv/yatzee-terminal/internal/ui"
+)
+
+// origem diz quem causou um passo da contagem. A tela usa isso para acender o
+// item que está somando agora, em vez de só escrever o nome dele no painel.
+type origem int
+
+const (
+	origemCombinacao origem = iota
+	origemDado
+	origemRuna
 )
 
 // passo é uma etapa da contagem. Fichas e mult são ambos somados: a combinação
@@ -14,6 +26,11 @@ type passo struct {
 	rotulo string
 	fichas int
 	mult   int
+	// de e indice apontam quem causou o passo: o dado ou a runa naquela
+	// posição. O índice é o lugar na mesa e no painel, não a ordem do passo,
+	// porque é o item na tela que tem de acender.
+	de     origem
+	indice int
 }
 
 // animacao percorre os passos de uma jogada.
@@ -36,15 +53,29 @@ func novaAnimacao(p regras.Pontuacao, dados regras.Mao, runas []regras.Runa) ani
 	base, mult := p.Combinacao.Base()
 	ps := []passo{{rotulo: p.Combinacao.Nome(), fichas: base, mult: mult}}
 
-	for _, d := range dados {
-		ps = append(ps, passo{rotulo: fmt.Sprintf("dado %d", d), fichas: d})
+	for i, d := range dados {
+		ps = append(ps, passo{
+			rotulo: fmt.Sprintf("dado %d", d),
+			fichas: d,
+			de:     origemDado,
+			indice: i,
+		})
 	}
-	for _, r := range runas {
+	// Cada runa que dispara vira um passo seu, separado dos dados: é o que
+	// deixa ver o que ela acrescentou, em vez de a diferença aparecer
+	// embutida no total.
+	for i, r := range runas {
 		if !r.Dispara(dados) {
 			continue
 		}
 		f, m := r.Aplica(dados)
-		ps = append(ps, passo{rotulo: "runa " + r.Letra, fichas: f, mult: m})
+		ps = append(ps, passo{
+			rotulo: "runa " + r.Letra,
+			fichas: f,
+			mult:   m,
+			de:     origemRuna,
+			indice: i,
+		})
 	}
 	return animacao{passos: ps}
 }
@@ -60,6 +91,17 @@ func (a animacao) avanca() animacao {
 	a.mult += p.mult
 	a.atual++
 	return a
+}
+
+// causa devolve quem causou o passo que acabou de entrar. É esse item que a
+// tela acende, e ele fica aceso até o próximo tique trocar o passo — o que dá
+// exatamente a duração de um tique.
+func (a animacao) causa() (origem, int) {
+	if a.atual <= 0 || a.atual > len(a.passos) {
+		return origemCombinacao, -1
+	}
+	p := a.passos[a.atual-1]
+	return p.de, p.indice
 }
 
 func (a animacao) rotulo(padrao string) string {
@@ -96,15 +138,23 @@ func (s Screen) painelEsquerdo() []string {
 	)
 }
 
-// painelRunas estica para preencher a largura disponível.
+// painelRunas estica para preencher a largura disponível. A runa que está
+// somando no tique acende de roxo — sem isso o passo dela passava batido, com
+// o nome aparecendo no painel da esquerda e nada apontando qual era.
 func (s Screen) painelRunas(largura int) []string {
+	de, aceso := s.acesa()
+
 	var caixas [][]string
 	for i := 0; i < regras.MaxRunas; i++ {
 		letra := " "
 		if i < len(s.partida.Runas) {
 			letra = s.partida.Runas[i].Letra
 		}
-		caixas = append(caixas, []string{".---.", "| " + letra + " |", "'---'"})
+		caixa := []string{".---.", "| " + letra + " |", "'---'"}
+		if de == origemRuna && i == aceso {
+			caixa = ui.Pinta(s.theme.Runa, caixa)
+		}
+		caixas = append(caixas, caixa)
 	}
 
 	out := ui.Painel(largura,
@@ -142,11 +192,26 @@ func (s Screen) mesa(largura, altura int) string {
 	// Mesa de dados, centralizada na largura. O dado escolhido para o reroll
 	// vai de vermelho inteiro — cubo, traço e rótulo —, porque os três são um
 	// sinal só: pintar apenas um pedaço deixaria a escolha pela metade.
+	//
+	// Quem está somando no tique ganha o azul, e ele vence o vermelho: no meio
+	// da contagem o reroll já não vai acontecer, e o que importa ver é de onde
+	// vieram os pontos que acabaram de entrar.
+	de, aceso := s.acesa()
+	corDo := func(i int) (lipgloss.Style, bool) {
+		if de == origemDado && i == aceso {
+			return s.theme.DadoContando, true
+		}
+		if s.partida.Marcados[i] {
+			return s.theme.DadoMarcado, true
+		}
+		return lipgloss.Style{}, false
+	}
+
 	var ds [][]string
 	for i, v := range s.partida.Dados {
 		d := ui.Dado(v)
-		if s.partida.Marcados[i] {
-			d = ui.Pinta(s.theme.DadoMarcado, d)
+		if cor, pinta := corDo(i); pinta {
+			d = ui.Pinta(cor, d)
 		}
 		ds = append(ds, d)
 	}
@@ -162,9 +227,9 @@ func (s Screen) mesa(largura, altura int) string {
 		}
 		rot = ui.Centraliza(rot, ui.LarguraDado)
 
-		if marcado {
-			marca = s.theme.DadoMarcado.Render(marca)
-			rot = s.theme.DadoMarcado.Render(rot)
+		if cor, pinta := corDo(i); pinta {
+			marca = cor.Render(marca)
+			rot = cor.Render(rot)
 		}
 		marcas.WriteString(marca)
 		rotulos.WriteString(rot)

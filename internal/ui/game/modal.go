@@ -149,7 +149,7 @@ func (s Screen) carta(i int) []string {
 	}
 
 	if s.sel == focoPrimeiraRuna+i {
-		out = ui.Pinta(s.theme.RunaEmFoco, out)
+		out = ui.Pinta(s.theme.Runa, out)
 	}
 	return out
 }
@@ -162,7 +162,7 @@ func (s Screen) marcaDaVitrine() string {
 		marca := strings.Repeat(" ", larguraCarta)
 		if s.sel == focoPrimeiraRuna+i {
 			marca = ui.Centraliza(strings.Repeat("^", larguraCarta-4), larguraCarta)
-			marca = s.theme.RunaEmFoco.Render(marca)
+			marca = s.theme.Runa.Render(marca)
 		}
 		b.WriteString(marca)
 		if i < len(s.vitrine)-1 {
